@@ -225,6 +225,7 @@
     .wcard {
       background: var(--surface); border: 1.5px solid var(--border);
       border-radius: 13px; padding: 13px 14px; margin-bottom: 9px;
+      cursor: pointer;
     }
     .wcard.planned { border-color: var(--primary); background: linear-gradient(135deg,#fbfaff,#f0f0ff); }
 
@@ -459,17 +460,19 @@
         <label class="fl">Activity Name *</label>
         <input class="fi" id="an" required placeholder="e.g. Hiking, Dinner, Tennis">
       </div>
-      <div class="fg">
-        <label class="fl">Emoji</label>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <div id="emoji-display" style="font-size:30px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:10px;border:1.5px solid var(--border);flex-shrink:0;">⭐</div>
-          <input class="fi" id="aemoji" placeholder="Or type any emoji" style="flex:1;">
+      <div class="f2">
+        <div class="fg">
+          <label class="fl">Emoji</label>
+          <input class="fi" id="aemoji" placeholder="e.g. 🛹" style="font-size:22px;">
         </div>
-        <div class="emoji-grid" id="emoji-grid"></div>
+        <div class="fg">
+          <label class="fl">Goal — every (days)</label>
+          <input class="fi" id="af" type="number" min="1" max="365" placeholder="30">
+        </div>
       </div>
       <div class="fg">
-        <label class="fl">Goal — every (days)</label>
-        <input class="fi" id="af" type="number" min="1" max="365" placeholder="30">
+        <label class="fl">Notes</label>
+        <textarea class="fi" id="adesc" placeholder="Links, details, anything…" rows="2"></textarea>
       </div>
       <input type="hidden" id="aid">
       <div class="f-actions">
@@ -799,8 +802,8 @@ function renderActivities() {
             <div class="card-title">${a.emoji||'⭐'} ${a.name}</div>
             <div class="card-sub">${cnt} ${cnt===1?'person':'people'}${a.freq?` · goal every ${a.freq}d`:''}</div>
             ${ds!==null?`<div class="card-sub" style="margin-top:2px;">Last done ${fmtDate(a.lastDone)}${over?` <span style="color:var(--red)">· ${ds-a.freq}d overdue</span>`:''}</div>`:''}
+            ${a.desc?`<div class="card-sub" style="margin-top:4px;">${a.desc}</div>`:''}
           </div>
-          <span class="chip cn" style="text-transform:capitalize;flex-shrink:0;">${a.cat||'other'}</span>
         </div>
       </div>`;
   }).join('');
@@ -964,30 +967,14 @@ function deletePerson() {
 }
 
 // ── ACTIVITY MODAL ────────────────────────────────────────────────────
-const EMOJIS=['⭐','🏄','🏊','🚴','🏃','🧗','🎿','🏕️','🎣','🎾','🏓','⚽','🏀','🎮','🎲','🎸','🎵','🎨','🎭','🎬','📚','🍽️','🍕','🍣','🥩','🍺','🍷','☕','🧘','💪','🛹','✈️','🏖️','🌄','🎪','🤿','🎯','🎱','🎉','🌮','🍜','🥗','🧉','🚵','🏋️','🛶','🎻','🥋','🤸','🏇','🧁'];
-function renderEmojiGrid(sel='') {
-  return EMOJIS.map(e=>`<button type="button" class="emoji-opt${e===sel?' sel':''}" onclick="selectEmoji('${e}')" data-e="${e}">${e}</button>`).join('');
-}
-function selectEmoji(e) {
-  document.getElementById('aemoji').value=e;
-  document.getElementById('emoji-display').textContent=e;
-  document.querySelectorAll('.emoji-opt').forEach(b=>b.classList.toggle('sel',b.dataset.e===e));
-}
 function openActModal(a=null) {
   document.getElementById('an').value=a?.name||'';
-  const em=a?.emoji||'';
-  document.getElementById('aemoji').value=em;
-  document.getElementById('emoji-display').textContent=em||'⭐';
+  document.getElementById('aemoji').value=a?.emoji||'';
   document.getElementById('af').value=a?.freq||'';
+  document.getElementById('adesc').value=a?.desc||'';
   document.getElementById('aid').value=a?.id||'';
   document.getElementById('m-act-title').textContent=a?'Edit Activity':'Add Activity';
   document.getElementById('a-del').style.display=a?'block':'none';
-  document.getElementById('emoji-grid').innerHTML=renderEmojiGrid(em);
-  document.getElementById('aemoji').oninput=function(){
-    const v=[...this.value][0]||'⭐';
-    document.getElementById('emoji-display').textContent=v;
-    document.querySelectorAll('.emoji-opt').forEach(b=>b.classList.toggle('sel',b.dataset.e===v));
-  };
   openModal('m-act');
   setTimeout(()=>document.getElementById('an').focus(),320);
 }
@@ -997,6 +984,7 @@ function saveActivity(e) {
   const obj={
     id:id||uid(), name:document.getElementById('an').value.trim(),
     emoji:[...document.getElementById('aemoji').value][0]||'⭐',
+    desc:document.getElementById('adesc').value.trim(),
     freq:parseInt(document.getElementById('af').value)||null,
     lastDone: id ? (getAct(id)?.lastDone||null) : null
   };
