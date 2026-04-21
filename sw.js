@@ -27,24 +27,37 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch: cache-first for app shell, network-first for others ────────────────
+// ── Fetch: network-first for HTML, cache-first for other assets ──────────────
 self.addEventListener('fetch', event => {
-  // Only handle same-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        // Cache successful GET responses
-        if (response.ok && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
+  const isHTML = event.request.destination === 'document' ||
+                 event.request.url.endsWith('.html');
+
+  if (isHTML) {
+    // Always fetch HTML fresh — fall back to cache if offline
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
-      }).catch(() => cached || new Response('Offline', { status: 503 }));
-    })
-  );
+      }).catch(() => caches.match(event.request))
+    );
+  } else {
+    // Cache-first for icons, manifest, etc.
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          if (response.ok && event.request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        }).catch(() => cached || new Response('Offline', { status: 503 }));
+      })
+    );
+  }
 });
 
 // ── Push Notifications ─────────────────────────────────────────────────────────
