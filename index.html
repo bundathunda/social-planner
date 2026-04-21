@@ -819,7 +819,7 @@ function renderWeekends() {
       const act=plan.actId?getAct(plan.actId):null;
       const ppl=(plan.pplIds||[]).map(getPers).filter(Boolean);
       return `
-        <div class="wcard planned" onclick="openWkndModal(${JSON.stringify(w.sat)})">
+        <div class="wcard planned" onclick="openWkndModal('${w.sat}')">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:13px;color:var(--txt2);">${label}</span>
             <span class="chip cp">Planned</span>
@@ -830,7 +830,7 @@ function renderWeekends() {
         </div>`;
     }
     return `
-      <div class="wcard" onclick="openWkndModal(${JSON.stringify(w.sat)})" style="cursor:pointer;">
+      <div class="wcard" onclick="openWkndModal('${w.sat}')" style="cursor:pointer;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:13px;color:var(--txt2);">${label}</div>
