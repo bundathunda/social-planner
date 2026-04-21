@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Social Planner">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>Social Life Planner</title>
+  <style>
+    /* ── Variables & Reset ─────────────────────────────────────────── */
+    :root {
+      --primary:       #6366f1;
+      --primary-dk:    #4f46e5;
+      --primary-lt:    #e0e7ff;
+      --accent:        #f59e0b;
+      --accent-lt:     #fef3c7;
+      --green:         #10b981;
+      --green-lt:      #d1fae5;
+      --red:           #ef4444;
+      --red-lt:        #fee2e2;
+      --txt:           #111827;
+      --txt2:          #6b7280;
+      --border:        #e5e7eb;
+      --surface:       #ffffff;
+      --bg:            #f9fafb;
+      --nav-h:         64px;
+      --hdr-h:         56px;
+      --safe-b:        env(safe-area-inset-bottom, 0px);
+      --safe-t:        env(safe-area-inset-top, 0px);
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { height:100%; overflow:hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: var(--bg); color: var(--txt); font-size: 16px; line-height: 1.5;
+    }
+
+    /* ── App Shell ─────────────────────────────────────────────────── */
+    #app {
+      display: flex; flex-direction: column;
+      height: 100vh; height: 100dvh;
+      max-width: 480px; margin: 0 auto;
+      background: var(--surface);
+      position: relative; overflow: hidden;
+      box-shadow: 0 0 40px rgba(0,0,0,0.08);
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    .hdr {
+      height: var(--hdr-h); padding-top: var(--safe-t);
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding-left: 18px; padding-right: 14px; flex-shrink: 0; z-index: 10;
+    }
+    .hdr h1 { font-size: 18px; font-weight: 700; }
+    .hdr-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--primary-lt); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--primary); transition: background 0.15s;
+    }
+    .hdr-btn:active { background: #c7d2fe; }
+
+    /* ── Main Content ──────────────────────────────────────────────── */
+    main {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--nav-h) + var(--safe-b) + 20px);
+    }
+    .tab { display: none; padding: 16px; min-height: 100%; }
+    .tab.active { display: block; }
+
+    /* ── Bottom Navigation ─────────────────────────────────────────── */
+    .bnav {
+      height: calc(var(--nav-h) + var(--safe-b));
+      padding-bottom: var(--safe-b);
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; align-items: stretch; flex-shrink: 0; z-index: 10;
+    }
+    .nav-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 3px; border: none; background: none;
+      cursor: pointer; color: var(--txt2); font-size: 10px; font-weight: 500;
+      padding: 0; transition: color 0.15s;
+    }
+    .nav-btn svg { width: 22px; height: 22px; }
+    .nav-btn.active { color: var(--primary); }
+
+    /* ── Cards ─────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .card:active { background: #fafafa; }
+    .card-row { display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 15px; font-weight: 600; }
+    .card-sub { font-size: 13px; color: var(--txt2); margin-top: 1px; }
+
+    /* ── Section Header ────────────────────────────────────────────── */
+    .sec-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 4px 0 10px;
+    }
+    .sec-title {
+      font-size: 11px; font-weight: 700; color: var(--txt2);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    /* ── Chips ─────────────────────────────────────────────────────── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .cp { background: var(--primary-lt); color: var(--primary-dk); }
+    .cg { background: var(--green-lt);   color: var(--green); }
+    .ca { background: var(--accent-lt);  color: #b45309; }
+    .cr { background: var(--red-lt);     color: var(--red); }
+    .cn { background: #f3f4f6;           color: var(--txt2); }
+
+    /* ── Buttons ───────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer; transition: all 0.15s; font-family: inherit;
+    }
+    .btn-p  { background: var(--primary);  color: #fff; }
+    .btn-p:active { background: var(--primary-dk); }
+    .btn-o  { background: none; border: 1.5px solid var(--border); color: var(--txt); }
+    .btn-o:active { background: var(--bg); }
+    .btn-r  { background: var(--red-lt); color: var(--red); }
+    .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+    .btn-icon {
+      width: 32px; height: 32px; padding: 0; border-radius: 8px;
+      background: none; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; color: var(--txt2);
+    }
+
+    /* ── FAB ───────────────────────────────────────────────────────── */
+    .fab {
+      position: fixed;
+      bottom: calc(var(--nav-h) + var(--safe-b) + 14px);
+      right: 16px;
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--primary); color: #fff; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.45);
+      transition: transform 0.15s, box-shadow 0.15s; z-index: 50;
+    }
+    .fab:active { transform: scale(0.94); box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
+
+    /* ── Modal ─────────────────────────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100;
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border-radius: 22px 22px 0 0;
+      width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto;
+      padding: 0 20px calc(24px + var(--safe-b));
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .overlay.open .modal { transform: translateY(0); }
+    .modal-pull {
+      width: 36px; height: 4px; background: var(--border); border-radius: 2px;
+      margin: 14px auto 18px;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+
+    /* ── Form ──────────────────────────────────────────────────────── */
+    .fg { margin-bottom: 14px; }
+    .fl {
+      display: block; font-size: 11px; font-weight: 700; color: var(--txt2);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+    .fi {
+      width: 100%; padding: 10px 13px; border: 1.5px solid var(--border);
+      border-radius: 9px; font-size: 15px; color: var(--txt); background: var(--surface);
+      transition: border-color 0.15s; font-family: inherit; appearance: none;
+    }
+    .fi:focus { outline: none; border-color: var(--primary); }
+    select.fi {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 11px center; padding-right: 34px;
+    }
+    textarea.fi { resize: vertical; min-height: 72px; }
+    .f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* ── Selectable chips (form) ───────────────────────────────────── */
+    .sel-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .sel-chip {
+      padding: 6px 13px; border-radius: 999px; border: 1.5px solid var(--border);
+      background: none; font-size: 13px; cursor: pointer; transition: all 0.15s;
+      color: var(--txt); font-family: inherit;
+    }
+    .sel-chip.on { border-color: var(--primary); background: var(--primary-lt); color: var(--primary-dk); }
+
+    /* ── Avatar ────────────────────────────────────────────────────── */
+    .av {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ── Progress bar ──────────────────────────────────────────────── */
+    .pbar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 8px; }
+    .pbar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+
+    /* ── Recommendation card ───────────────────────────────────────── */
+    .rec-card {
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 11px;
+      border: 1.5px solid transparent;
+    }
+    .rec-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Weekend card ──────────────────────────────────────────────── */
+    .wcard {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 13px; padding: 13px 14px; margin-bottom: 9px;
+    }
+    .wcard.planned { border-color: var(--primary); background: linear-gradient(135deg,#fbfaff,#f0f0ff); }
+
+    /* ── Stats row ─────────────────────────────────────────────────── */
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 18px; }
+    .stat { background: var(--bg); border-radius: 11px; padding: 12px 8px; text-align: center; }
+    .stat-v { font-size: 24px; font-weight: 800; color: var(--primary); }
+    .stat-l { font-size: 11px; color: var(--txt2); margin-top: 1px; }
+
+    /* ── Empty state ───────────────────────────────────────────────── */
+    .empty { text-align: center; padding: 52px 24px; color: var(--txt2); }
+    .empty svg { width: 54px; height: 54px; margin-bottom: 14px; opacity: 0.25; }
+    .empty h3 { font-size: 16px; font-weight: 600; color: var(--txt); margin-bottom: 5px; }
+    .empty p { font-size: 14px; }
+
+    /* ── Notification banner ───────────────────────────────────────── */
+    .notif-banner {
+      background: var(--primary-lt); border: 1px solid #c7d2fe;
+      border-radius: 11px; padding: 11px 13px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .notif-banner p { flex: 1; font-size: 13px; color: var(--primary-dk); }
+
+    /* ── Toast ─────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + var(--safe-b) + 14px);
+      left: 50%; transform: translateX(-50%) translateY(16px);
+      background: #1f2937; color: #fff; padding: 9px 20px; border-radius: 999px;
+      font-size: 13px; font-weight: 500; opacity: 0;
+      transition: all 0.2s; pointer-events: none; z-index: 300; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Search input ──────────────────────────────────────────────── */
+    .search {
+      width: 100%; padding: 10px 13px 10px 36px;
+      border: 1.5px solid var(--border); border-radius: 9px;
+      font-size: 15px; background: var(--bg); margin-bottom: 12px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: 11px center;
+      font-family: inherit; color: var(--txt);
+    }
+    .search:focus { outline: none; border-color: var(--primary); background-color: var(--surface); }
+
+    /* ── Form actions ──────────────────────────────────────────────── */
+    .f-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .f-actions .btn { flex: 1; }
+    .f-del { margin-top: 10px; }
+    .f-del .btn { width: 100%; }
+
+    /* ── Person mini-pill ──────────────────────────────────────────── */
+    .ppill {
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; display: inline-block;
+    }
+
+    /* ── Trip status ───────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+    /* ── Scrollable chip row ───────────────────────────────────────── */
+    .act-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="hdr">
+    <h1 id="hdr-title">Suggestions</h1>
+    <button class="hdr-btn" id="notif-btn" onclick="requestNotifs()" title="Enable notifications">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ── Tab Content ───────────────────────────────────────────── -->
+  <main id="main">
+
+    <!-- HOME / SUGGESTIONS -->
+    <div id="t-home" class="tab active">
+      <div class="stats" id="stats-row"></div>
+      <div id="notif-prompt"></div>
+      <div class="sec-hdr">
+        <span class="sec-title">Overdue Connections</span>
+      </div>
+      <div id="recs-list"></div>
+      <div class="sec-hdr" style="margin-top:20px">
+        <span class="sec-title">Overdue Activities</span>
+      </div>
+      <div id="act-recs-list"></div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div id="t-people" class="tab">
+      <input type="text" class="search" id="people-search" placeholder="Search people…" oninput="renderPeople()">
+      <div id="people-list"></div>
+    </div>
+
+    <!-- ACTIVITIES -->
+    <div id="t-activities" class="tab">
+      <div id="act-list"></div>
+    </div>
+
+    <!-- WEEKENDS -->
+    <div id="t-weekends" class="tab">
+      <div class="sec-hdr"><span class="sec-title">Upcoming Weekends</span></div>
+      <div id="wknd-list"></div>
+    </div>
+
+    <!-- TRIPS -->
+    <div id="t-trips" class="tab">
+      <div id="trips-list"></div>
+    </div>
+
+  </main>
+
+  <!-- ── FAB ───────────────────────────────────────────────────── -->
+  <button class="fab" id="fab" onclick="fabTap()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+
+  <!-- ── Bottom Nav ─────────────────────────────────────────────── -->
+  <nav class="bnav">
+    <button class="nav-btn active" data-tab="home" onclick="goTab('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+      </svg>
+      Suggest
+    </button>
+    <button class="nav-btn" data-tab="people" onclick="goTab('people')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      People
+    </button>
+    <button class="nav-btn" data-tab="activities" onclick="goTab('activities')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Activities
+    </button>
+    <button class="nav-btn" data-tab="weekends" onclick="goTab('weekends')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      Weekends
+    </button>
+    <button class="nav-btn" data-tab="trips" onclick="goTab('trips')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19.5 2.5c-1.5-1.5-3.5-1.5-5 0L11 6 2.8 4.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 3 3-3v-1l3-2 5.3 7.3c.3.4.8.5 1.3.3l.5-.3c.4-.2.6-.6.5-1.1z"/>
+      </svg>
+      Trips
+    </button>
+  </nav>
+</div>
+
+<!-- ═══════════════ MODALS ════════════════════════════════════════════ -->
+
+<!-- Person Modal -->
+<div class="overlay" id="m-person">
+  <div class="modal">
+    <div class="modal-pull"></div>
+    <div class="modal-title" id="m-person-title">Add Person</div>
+    <form onsubmit="savePerson(event)">
+      <div class="fg">
+        <label class="fl">Name *</label>
+        <input class="fi" id="pn" required placeholder="Full name" autocomplete="name">
+      </div>
+      <div class="f2">
+        <div class="fg">
+          <label class="fl">Phone</label>
+          <input class="fi" id="pp" type="tel" placeholder="+1 555 0000" autocomplete="tel">
+        </div>
+        <div class="fg">
+          <label class="fl">Contact via</label>
+          <select class="fi" id="pcm">
+            <option value="text">💬 Text</option>
+            <option value="call">📞 Call</option>
+            <option value="whatsapp">📱 WhatsApp</option>
+            <option value="instagram">📸 Instagram</option>
+            <option value="email">✉️ Email</option>
+            <option value="in-person">🤝 In person</option>
+          </select>
+        </div>
+      </div>
+      <div class="f2">
+        <div class="fg">
+          <label class="fl">See every (days)</label>
+          <input class="fi" id="pf" type="number" min="1" max="365" placeholder="14" value="14">
+        </div>
+        <div class="fg">
+          <label class="fl">Last seen</label>
+          <input class="fi" id="pls" type="date">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Shared Activities</label>
+        <div class="sel-chips" id="p-act-chips"></div>
+      </div>
+      <input type="hidden" id="pid">
+      <div class="f-actions">
+        <button type="button" class="btn btn-o" onclick="closeModal('m-person')">Cancel</button>
+        <button type="submit" class="btn btn-p">Save Person</button>
+      </div>
+      <div class="f-del" id="p-del" style="display:none">
+        <button type="button" class="btn btn-r" onclick="deletePerson()">Delete Person</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Activity Modal -->
+<div class="overlay" id="m-act">
+  <div class="modal">
+    <div class="modal-pull"></div>
+    <div class="modal-title" id="m-act-title">Add Activity</div>
+    <form onsubmit="saveActivity(event)">
+      <div class="fg">
+        <label class="fl">Activity Name *</label>
+        <input class="fi" id="an" required placeholder="e.g. Hiking, Dinner, Tennis">
+      </div>
+      <div class="f2">
+        <div class="fg">
+          <label class="fl">Category</label>
+          <select class="fi" id="acat">
+            <option value="outdoor">🏕️ Outdoor</option>
+            <option value="dining">🍽️ Dining & Drinks</option>
+            <option value="sports">🏃 Sports & Fitness</option>
+            <option value="arts">🎨 Arts & Culture</option>
+            <option value="social">🎲 Social & Games</option>
+            <option value="travel">✈️ Travel</option>
+            <option value="other">⭐ Other</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Goal (days)</label>
+          <input class="fi" id="af" type="number" min="1" max="365" placeholder="30">
+        </div>
+      </div>
+      <input type="hidden" id="aid">
+      <div class="f-actions">
+        <button type="button" class="btn btn-o" onclick="closeModal('m-act')">Cancel</button>
+        <button type="submit" class="btn btn-p">Save Activity</button>
+      </div>
+      <div class="f-del" id="a-del" style="display:none">
+        <button type="button" class="btn btn-r" onclick="deleteActivity()">Delete Activity</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Weekend Modal -->
+<div class="overlay" id="m-wknd">
+  <div class="modal">
+    <div class="modal-pull"></div>
+    <div class="modal-title">Plan Weekend</div>
+    <form onsubmit="saveWeekend(event)">
+      <div class="fg">
+        <label class="fl">Weekend of (Saturday)</label>
+        <input class="fi" id="wd" type="date" required>
+      </div>
+      <div class="fg">
+        <label class="fl">Activity</label>
+        <select class="fi" id="wa">
+          <option value="">— Choose activity —</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">People</label>
+        <div class="sel-chips" id="w-ppl-chips"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Notes</label>
+        <textarea class="fi" id="wn" placeholder="Any details, ideas, links…"></textarea>
+      </div>
+      <input type="hidden" id="wid">
+      <div class="f-actions">
+        <button type="button" class="btn btn-o" onclick="closeModal('m-wknd')">Cancel</button>
+        <button type="submit" class="btn btn-p">Save Plan</button>
+      </div>
+      <div class="f-del" id="w-del" style="display:none">
+        <button type="button" class="btn btn-r" onclick="deleteWeekend()">Remove Plan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Trip Modal -->
+<div class="overlay" id="m-trip">
+  <div class="modal">
+    <div class="modal-pull"></div>
+    <div class="modal-title" id="m-trip-title">Add Trip</div>
+    <form onsubmit="saveTrip(event)">
+      <div class="fg">
+        <label class="fl">Destination *</label>
+        <input class="fi" id="tdest" required placeholder="e.g. Kyoto, Japan">
+      </div>
+      <div class="f2">
+        <div class="fg">
+          <label class="fl">Start Date</label>
+          <input class="fi" id="tstart" type="date">
+        </div>
+        <div class="fg">
+          <label class="fl">End Date</label>
+          <input class="fi" id="tend" type="date">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Status</label>
+        <select class="fi" id="tstat">
+          <option value="dreaming">💭 Dreaming</option>
+          <option value="planning">📋 Planning</option>
+          <option value="confirmed">✅ Confirmed</option>
+          <option value="completed">🏁 Completed</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Travel Companions</label>
+        <div class="sel-chips" id="t-ppl-chips"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Notes</label>
+        <textarea class="fi" id="tnotes" placeholder="Ideas, bucket list items, links…"></textarea>
+      </div>
+      <input type="hidden" id="tid">
+      <div class="f-actions">
+        <button type="button" class="btn btn-o" onclick="closeModal('m-trip')">Cancel</button>
+        <button type="submit" class="btn btn-p">Save Trip</button>
+      </div>
+      <div class="f-del" id="t-del" style="display:none">
+        <button type="button" class="btn btn-r" onclick="deleteTrip()">Delete Trip</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════ JAVASCRIPT ════════════════════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+let S = { people:[], activities:[], weekends:[], trips:[], tab:'home' };
+
+// ── Persistence ───────────────────────────────────────────────────────
+const STORE = 'slp_v1';
+function save() { localStorage.setItem(STORE, JSON.stringify(S)); }
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || '{}');
+    S.people     = d.people     || [];
+    S.activities = d.activities || [];
+    S.weekends   = d.weekends   || [];
+    S.trips      = d.trips      || [];
+  } catch(_) {}
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ── Date utils ────────────────────────────────────────────────────────
+function today() { return new Date().toISOString().split('T')[0]; }
+function parseD(s) { if(!s) return null; const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function daysBetween(a,b) { return Math.round((parseD(b)-parseD(a))/(864e5)); }
+function daysSince(s) { return s ? daysBetween(s, today()) : null; }
+function fmtDate(s) {
+  if(!s) return '—';
+  return parseD(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function upcomingWeekends(n=10) {
+  const out=[]; const d=new Date(); const day=d.getDay();
+  d.setDate(d.getDate()+(day===6?0:6-day)); d.setHours(0,0,0,0);
+  for(let i=0;i<n;i++){
+    const sat=new Date(d); const sun=new Date(d); sun.setDate(sun.getDate()+1);
+    out.push({sat:sat.toISOString().split('T')[0],sun:sun.toISOString().split('T')[0]});
+    d.setDate(d.getDate()+7);
+  } return out;
+}
+function wkndLabel(sat) {
+  const s=parseD(sat), u=new Date(s); u.setDate(u.getDate()+1);
+  const o={month:'short',day:'numeric'};
+  return `${s.toLocaleDateString('en-US',o)} – ${u.toLocaleDateString('en-US',o)}`;
+}
+
+// ── Avatar helpers ────────────────────────────────────────────────────
+const AV_COLS=[['#e0e7ff','#4f46e5'],['#d1fae5','#059669'],['#fef3c7','#d97706'],
+               ['#fce7f3','#db2777'],['#dbeafe','#2563eb'],['#ede9fe','#7c3aed'],
+               ['#fee2e2','#dc2626'],['#e0f2fe','#0284c7']];
+function avCol(name) { let h=0; for(const c of name) h=(h*31+c.charCodeAt(0))%AV_COLS.length; return AV_COLS[Math.abs(h)]; }
+function initials(name) { return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+// ── Lookups ───────────────────────────────────────────────────────────
+const getAct  = id => S.activities.find(a=>a.id===id);
+const getPers = id => S.people.find(p=>p.id===id);
+
+// ── Category icon ─────────────────────────────────────────────────────
+const catIco = c => ({'outdoor':'🏕️','dining':'🍽️','sports':'🏃','arts':'🎨','social':'🎲','travel':'✈️','other':'⭐'}[c]||'⭐');
+const cmIco  = c => ({'text':'💬','call':'📞','whatsapp':'📱','instagram':'📸','email':'✉️','in-person':'🤝'}[c]||'📲');
+
+// ── Recommendations engine ────────────────────────────────────────────
+function overduePeople() {
+  return S.people
+    .filter(p=>p.lastSeen && p.freq)
+    .map(p=>{ const ds=daysSince(p.lastSeen); return {...p,ds,overdue:ds-p.freq,pct:Math.min(100,(ds/p.freq)*100)}; })
+    .filter(p=>p.overdue>0)
+    .sort((a,b)=>b.overdue-a.overdue);
+}
+function overdueActivities() {
+  return S.activities
+    .filter(a=>a.freq && a.lastDone)
+    .map(a=>{ const ds=daysSince(a.lastDone); return {...a,ds,overdue:ds-a.freq}; })
+    .filter(a=>a.overdue>0)
+    .sort((a,b)=>b.overdue-a.overdue);
+}
+function urgencyColor(days) {
+  if(days>30) return 'var(--red)';
+  if(days>14) return 'var(--accent)';
+  return 'var(--primary)';
+}
+function urgencyLabel(days) {
+  if(days>30) return 'Very overdue';
+  if(days>14) return 'Overdue';
+  return 'Due soon';
+}
+
+// ── RENDER: HOME ──────────────────────────────────────────────────────
+function renderHome() {
+  const od=overduePeople(); const oda=overdueActivities();
+  const planned=S.weekends.filter(w=>w.date>=today()).length;
+
+  // Stats
+  document.getElementById('stats-row').innerHTML=`
+    <div class="stat"><div class="stat-v">${S.people.length}</div><div class="stat-l">People</div></div>
+    <div class="stat"><div class="stat-v" style="color:${od.length?'var(--accent)':'var(--green)'}">${od.length}</div><div class="stat-l">Overdue</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--green)">${planned}</div><div class="stat-l">Planned</div></div>
+  `;
+
+  // Notification prompt
+  const nb=document.getElementById('notif-prompt');
+  nb.innerHTML = Notification.permission==='default' ? `
+    <div class="notif-banner">
+      <span style="font-size:20px">🔔</span>
+      <p>Get reminders when friends go overdue.</p>
+      <button class="btn btn-sm btn-p" onclick="requestNotifs()">Enable</button>
+    </div>` : '';
+
+  // People recs
+  const rl=document.getElementById('recs-list');
+  if(od.length===0) {
+    rl.innerHTML=S.people.length===0
+      ? `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h3>No people yet</h3><p>Tap + to add your first friend</p></div>`
+      : `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><h3>All caught up!</h3><p>No overdue connections right now.</p></div>`;
+  } else {
+    rl.innerHTML=od.map(p=>{
+      const [bg,fg]=avCol(p.name);
+      const acts=(p.activities||[]).map(getAct).filter(Boolean);
+      const uc=urgencyColor(p.overdue);
+      return `
+        <div class="rec-card" style="background:linear-gradient(135deg,${bg}66,${bg}aa);border-color:${fg}30;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <div class="rec-dot" style="background:${uc}"></div>
+            <span style="font-size:12px;color:${uc};font-weight:700;">${urgencyLabel(p.overdue)} · ${p.overdue}d overdue</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;">
+            <div class="av" style="background:${bg};color:${fg};width:42px;height:42px;font-size:16px;">${initials(p.name)}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="card-title">${p.name}</div>
+              <div class="card-sub">Last seen ${fmtDate(p.lastSeen)} · ${p.ds}d ago</div>
+            </div>
+            <button class="btn btn-sm btn-p" onclick="markSeen('${p.id}')">Seen ✓</button>
+          </div>
+          <div class="pbar"><div class="pbar-fill" style="width:${p.pct}%;background:${uc};"></div></div>
+          ${acts.length ? `
+            <div style="margin-top:10px;">
+              <div style="font-size:11px;color:var(--txt2);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Suggested Activities</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${acts.map(a=>`<button class="sel-chip" onclick="planWith('${p.id}','${a.id}')">${catIco(a.cat)} ${a.name}</button>`).join('')}
+              </div>
+            </div>` : ''}
+          <div style="display:flex;gap:7px;margin-top:10px;">
+            <button class="btn btn-sm btn-o" onclick="contactPerson('${p.id}')" style="flex:1">${cmIco(p.cm)} Reach out</button>
+            <button class="btn btn-sm btn-o" onclick="planWeekendWith('${p.id}')" style="flex:1">📅 Plan weekend</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Activity recs
+  const al=document.getElementById('act-recs-list');
+  if(oda.length===0) {
+    al.innerHTML=`<div style="color:var(--txt2);font-size:14px;padding:4px 0 8px;">No overdue activities.</div>`;
+  } else {
+    al.innerHTML=oda.map(a=>{
+      const ppl=S.people.filter(p=>(p.activities||[]).includes(a.id));
+      const uc=urgencyColor(a.overdue);
+      return `
+        <div class="card" style="cursor:default;border-left:3px solid ${uc};">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div class="card-title">${catIco(a.cat)} ${a.name}</div>
+              <div class="card-sub">Last done ${fmtDate(a.lastDone)} · ${a.overdue}d overdue</div>
+            </div>
+            <button class="btn btn-sm btn-o" onclick="openActModal(getAct('${a.id}'))">Update</button>
+          </div>
+          ${ppl.length ? `
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
+              ${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${p.name.split(' ')[0]}</span>`; }).join('')}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+  }
+}
+
+// ── RENDER: PEOPLE ────────────────────────────────────────────────────
+function renderPeople() {
+  const q=(document.getElementById('people-search')?.value||'').toLowerCase();
+  let pp=[...S.people].filter(p=>!q||p.name.toLowerCase().includes(q));
+  pp.sort((a,b)=>a.name.localeCompare(b.name));
+  const el=document.getElementById('people-list');
+  if(!pp.length) {
+    el.innerHTML=q
+      ? `<div class="empty"><h3>No results</h3><p>No people matching "${q}"</p></div>`
+      : `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h3>No people yet</h3><p>Tap + to add your first friend</p></div>`;
+    return;
+  }
+  el.innerHTML=pp.map(p=>{
+    const [bg,fg]=avCol(p.name);
+    const ds=daysSince(p.lastSeen);
+    const over=ds!==null&&p.freq&&ds>p.freq;
+    const acts=(p.activities||[]).map(getAct).filter(Boolean);
+    const badge=over
+      ? `<span class="chip cr">Overdue ${ds-p.freq}d</span>`
+      : ds!==null ? `<span class="chip cg">✓ ${ds}d ago</span>`
+      : `<span class="chip cn">No date</span>`;
+    return `
+      <div class="card" onclick="openPersonModal(getPers('${p.id}'))">
+        <div style="display:flex;align-items:center;gap:11px;">
+          <div class="av" style="background:${bg};color:${fg};">${initials(p.name)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</div>
+              ${badge}
+            </div>
+            <div class="card-sub">${cmIco(p.cm||'text')} ${p.cm||'text'}${p.freq?` · every ${p.freq}d`:''}</div>
+            ${acts.length?`<div class="act-row">${acts.slice(0,4).map(a=>`<span class="chip cn">${catIco(a.cat)} ${a.name}</span>`).join('')}${acts.length>4?`<span class="chip cn">+${acts.length-4}</span>`:''}</div>`:''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── RENDER: ACTIVITIES ────────────────────────────────────────────────
+function renderActivities() {
+  const el=document.getElementById('act-list');
+  if(!S.activities.length) {
+    el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><h3>No activities yet</h3><p>Tap + to add your first activity</p></div>`;
+    return;
+  }
+  el.innerHTML=S.activities.map(a=>{
+    const cnt=S.people.filter(p=>(p.activities||[]).includes(a.id)).length;
+    const ds=a.lastDone?daysSince(a.lastDone):null;
+    const over=ds!==null&&a.freq&&ds>a.freq;
+    return `
+      <div class="card" onclick="openActModal(getAct('${a.id}'))">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="min-width:0;">
+            <div class="card-title">${catIco(a.cat)} ${a.name}</div>
+            <div class="card-sub">${cnt} ${cnt===1?'person':'people'}${a.freq?` · goal every ${a.freq}d`:''}</div>
+            ${ds!==null?`<div class="card-sub" style="margin-top:2px;">Last done ${fmtDate(a.lastDone)}${over?` <span style="color:var(--red)">· ${ds-a.freq}d overdue</span>`:''}</div>`:''}
+          </div>
+          <span class="chip cn" style="text-transform:capitalize;flex-shrink:0;">${a.cat||'other'}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── RENDER: WEEKENDS ──────────────────────────────────────────────────
+function renderWeekends() {
+  const wks=upcomingWeekends(10);
+  document.getElementById('wknd-list').innerHTML=wks.map(w=>{
+    const plan=S.weekends.find(p=>p.date===w.sat);
+    const label=wkndLabel(w.sat);
+    if(plan){
+      const act=plan.actId?getAct(plan.actId):null;
+      const ppl=(plan.pplIds||[]).map(getPers).filter(Boolean);
+      return `
+        <div class="wcard planned" onclick="openWkndModal(${JSON.stringify(w.sat)})">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:13px;color:var(--txt2);">${label}</span>
+            <span class="chip cp">Planned</span>
+          </div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px;">${act?`${catIco(act.cat)} ${act.name}`:'📅 Weekend plan'}</div>
+          ${ppl.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;">${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${initials(p.name)} ${p.name.split(' ')[0]}</span>`; }).join('')}</div>`:''}
+          ${plan.notes?`<div class="card-sub" style="margin-top:6px;">${plan.notes}</div>`:''}
+        </div>`;
+    }
+    return `
+      <div class="wcard" onclick="openWkndModal(${JSON.stringify(w.sat)})">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;color:var(--txt2);">${label}</div>
+            <div style="font-size:14px;color:var(--txt2);margin-top:2px;">Free weekend</div>
+          </div>
+          <button class="btn btn-sm btn-o" onclick="event.stopPropagation();openWkndModal(${JSON.stringify(w.sat)})">+ Plan</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── RENDER: TRIPS ─────────────────────────────────────────────────────
+function renderTrips() {
+  const el=document.getElementById('trips-list');
+  if(!S.trips.length){
+    el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19.5 2.5c-1.5-1.5-3.5-1.5-5 0L11 6 2.8 4.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 3 3-3v-1l3-2 5.3 7.3c.3.4.8.5 1.3.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg><h3>No trips yet</h3><p>Start dreaming up your next adventure</p></div>`;
+    return;
+  }
+  const ord={confirmed:0,planning:1,dreaming:2,completed:3};
+  const sorted=[...S.trips].sort((a,b)=>{
+    const d=(ord[a.stat]||0)-(ord[b.stat]||0);
+    return d||((a.start&&b.start)?a.start.localeCompare(b.start):0);
+  });
+  const scfg={
+    dreaming: {cls:'cn',lbl:'💭 Dreaming'},
+    planning: {cls:'ca',lbl:'📋 Planning'},
+    confirmed:{cls:'cp',lbl:'✅ Confirmed'},
+    completed:{cls:'cg',lbl:'🏁 Completed'}
+  };
+  el.innerHTML=sorted.map(t=>{
+    const ppl=(t.pplIds||[]).map(getPers).filter(Boolean);
+    const sc=scfg[t.stat]||scfg.planning;
+    const until=t.start?daysBetween(today(),t.start):null;
+    const dur=t.start&&t.end?daysBetween(t.start,t.end):null;
+    return `
+      <div class="card" onclick="openTripModal(getTrip('${t.id}'))">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="min-width:0;">
+            <div class="card-title">✈️ ${t.dest}</div>
+            ${t.start?`<div class="card-sub">${fmtDate(t.start)}${t.end?` – ${fmtDate(t.end)}`:''}${dur?` · ${dur}d`:''}</div>`:'<div class="card-sub">No dates set</div>'}
+            ${until!==null&&until>=0&&t.stat!=='completed'?`<div style="font-size:13px;color:var(--primary);font-weight:600;margin-top:2px;">${until}d away</div>`:''}
+          </div>
+          <span class="chip ${sc.cls}" style="flex-shrink:0;">${sc.lbl}</span>
+        </div>
+        ${ppl.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${p.name.split(' ')[0]}</span>`; }).join('')}</div>`:''}
+        ${t.notes?`<div class="card-sub" style="margin-top:8px;">${t.notes}</div>`:''}
+      </div>`;
+  }).join('');
+}
+
+const getTrip=id=>S.trips.find(t=>t.id===id);
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────
+const TAB_TITLES={home:'Suggestions',people:'People',activities:'Activities',weekends:'Weekends',trips:'Trips'};
+function goTab(tab) {
+  S.tab=tab;
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active'));
+  document.getElementById(`t-${tab}`).classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById('hdr-title').textContent=TAB_TITLES[tab];
+  renderTab(tab);
+  document.getElementById('main').scrollTop=0;
+}
+function renderTab(tab) {
+  if(tab==='home') renderHome();
+  else if(tab==='people') renderPeople();
+  else if(tab==='activities') renderActivities();
+  else if(tab==='weekends') renderWeekends();
+  else if(tab==='trips') renderTrips();
+}
+
+// ── MODAL SYSTEM ──────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow='';
+}
+document.querySelectorAll('.overlay').forEach(o=>{
+  o.addEventListener('click',e=>{ if(e.target===o) closeModal(o.id); });
+});
+
+// ── FAB ───────────────────────────────────────────────────────────────
+function fabTap() {
+  const t=S.tab;
+  if(t==='people') openPersonModal();
+  else if(t==='activities') openActModal();
+  else if(t==='weekends') openWkndModal(null);
+  else if(t==='trips') openTripModal();
+  else openPersonModal();
+}
+
+// ── PERSON MODAL ──────────────────────────────────────────────────────
+function openPersonModal(p=null) {
+  document.getElementById('pn').value=p?.name||'';
+  document.getElementById('pp').value=p?.phone||'';
+  document.getElementById('pcm').value=p?.cm||'text';
+  document.getElementById('pf').value=p?.freq||14;
+  document.getElementById('pls').value=p?.lastSeen||today();
+  document.getElementById('pid').value=p?.id||'';
+  document.getElementById('m-person-title').textContent=p?'Edit Person':'Add Person';
+  document.getElementById('p-del').style.display=p?'block':'none';
+
+  const chips=document.getElementById('p-act-chips');
+  chips.innerHTML=S.activities.length
+    ? S.activities.map(a=>`<button type="button" class="sel-chip ${(p?.activities||[]).includes(a.id)?'on':''}" onclick="toggleChip(this)" data-id="${a.id}">${catIco(a.cat)} ${a.name}</button>`).join('')
+    : '<span style="color:var(--txt2);font-size:13px;">Add activities first</span>';
+
+  openModal('m-person');
+  setTimeout(()=>document.getElementById('pn').focus(),320);
+}
+function savePerson(e) {
+  e.preventDefault();
+  const id=document.getElementById('pid').value;
+  const acts=[...document.querySelectorAll('#p-act-chips .sel-chip.on')].map(c=>c.dataset.id);
+  const obj={
+    id:id||uid(), name:document.getElementById('pn').value.trim(),
+    phone:document.getElementById('pp').value.trim(), cm:document.getElementById('pcm').value,
+    freq:parseInt(document.getElementById('pf').value)||14,
+    lastSeen:document.getElementById('pls').value, activities:acts
+  };
+  if(id){ const i=S.people.findIndex(p=>p.id===id); S.people[i]=obj; }
+  else S.people.push(obj);
+  save(); closeModal('m-person'); renderTab(S.tab); toast(id?'Person updated':'Person added');
+}
+function deletePerson() {
+  const id=document.getElementById('pid').value;
+  S.people=S.people.filter(p=>p.id!==id);
+  save(); closeModal('m-person'); renderTab(S.tab); toast('Person removed');
+}
+
+// ── ACTIVITY MODAL ────────────────────────────────────────────────────
+function openActModal(a=null) {
+  document.getElementById('an').value=a?.name||'';
+  document.getElementById('acat').value=a?.cat||'outdoor';
+  document.getElementById('af').value=a?.freq||'';
+  document.getElementById('aid').value=a?.id||'';
+  document.getElementById('m-act-title').textContent=a?'Edit Activity':'Add Activity';
+  document.getElementById('a-del').style.display=a?'block':'none';
+  openModal('m-act');
+  setTimeout(()=>document.getElementById('an').focus(),320);
+}
+function saveActivity(e) {
+  e.preventDefault();
+  const id=document.getElementById('aid').value;
+  const obj={
+    id:id||uid(), name:document.getElementById('an').value.trim(),
+    cat:document.getElementById('acat').value,
+    freq:parseInt(document.getElementById('af').value)||null,
+    lastDone: id ? (getAct(id)?.lastDone||null) : null
+  };
+  if(id){ const i=S.activities.findIndex(a=>a.id===id); S.activities[i]=obj; }
+  else S.activities.push(obj);
+  save(); closeModal('m-act'); renderTab(S.tab); toast(id?'Activity updated':'Activity added');
+}
+function deleteActivity() {
+  const id=document.getElementById('aid').value;
+  S.activities=S.activities.filter(a=>a.id!==id);
+  S.people=S.people.map(p=>({...p,activities:(p.activities||[]).filter(x=>x!==id)}));
+  save(); closeModal('m-act'); renderTab(S.tab); toast('Activity removed');
+}
+
+// ── WEEKEND MODAL ─────────────────────────────────────────────────────
+function openWkndModal(sat, prefPerson=null, prefAct=null) {
+  const plan=sat?S.weekends.find(p=>p.date===sat):null;
+  document.getElementById('wd').value=sat||'';
+  document.getElementById('wn').value=plan?.notes||'';
+  document.getElementById('wid').value=plan?.id||'';
+  document.getElementById('w-del').style.display=plan?'block':'none';
+
+  const sel=document.getElementById('wa');
+  sel.innerHTML='<option value="">— Choose activity —</option>'+
+    S.activities.map(a=>`<option value="${a.id}"${(plan?.actId===a.id||prefAct===a.id)?' selected':''}>${catIco(a.cat)} ${a.name}</option>`).join('');
+
+  const selPpl=plan?.pplIds||(prefPerson?[prefPerson]:[]);
+  document.getElementById('w-ppl-chips').innerHTML=S.people.length
+    ? S.people.map(p=>`<button type="button" class="sel-chip ${selPpl.includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${initials(p.name)} ${p.name.split(' ')[0]}</button>`).join('')
+    : '<span style="color:var(--txt2);font-size:13px;">Add people first</span>';
+
+  openModal('m-wknd');
+}
+function saveWeekend(e) {
+  e.preventDefault();
+  const id=document.getElementById('wid').value;
+  const ppl=[...document.querySelectorAll('#w-ppl-chips .sel-chip.on')].map(c=>c.dataset.id);
+  const obj={
+    id:id||uid(), date:document.getElementById('wd').value,
+    actId:document.getElementById('wa').value||null,
+    pplIds:ppl, notes:document.getElementById('wn').value.trim()
+  };
+  if(id){ const i=S.weekends.findIndex(w=>w.id===id); S.weekends[i]=obj; }
+  else S.weekends.push(obj);
+  save(); closeModal('m-wknd'); renderTab(S.tab); toast('Weekend planned!');
+}
+function deleteWeekend() {
+  const id=document.getElementById('wid').value;
+  S.weekends=S.weekends.filter(w=>w.id!==id);
+  save(); closeModal('m-wknd'); renderTab(S.tab); toast('Plan removed');
+}
+
+// ── TRIP MODAL ────────────────────────────────────────────────────────
+function openTripModal(t=null) {
+  document.getElementById('tdest').value=t?.dest||'';
+  document.getElementById('tstart').value=t?.start||'';
+  document.getElementById('tend').value=t?.end||'';
+  document.getElementById('tstat').value=t?.stat||'dreaming';
+  document.getElementById('tnotes').value=t?.notes||'';
+  document.getElementById('tid').value=t?.id||'';
+  document.getElementById('m-trip-title').textContent=t?'Edit Trip':'Add Trip';
+  document.getElementById('t-del').style.display=t?'block':'none';
+
+  document.getElementById('t-ppl-chips').innerHTML=S.people.length
+    ? S.people.map(p=>`<button type="button" class="sel-chip ${(t?.pplIds||[]).includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${initials(p.name)} ${p.name.split(' ')[0]}</button>`).join('')
+    : '<span style="color:var(--txt2);font-size:13px;">Add people first</span>';
+
+  openModal('m-trip');
+  setTimeout(()=>document.getElementById('tdest').focus(),320);
+}
+function saveTrip(e) {
+  e.preventDefault();
+  const id=document.getElementById('tid').value;
+  const ppl=[...document.querySelectorAll('#t-ppl-chips .sel-chip.on')].map(c=>c.dataset.id);
+  const obj={
+    id:id||uid(), dest:document.getElementById('tdest').value.trim(),
+    start:document.getElementById('tstart').value, end:document.getElementById('tend').value,
+    stat:document.getElementById('tstat').value, pplIds:ppl,
+    notes:document.getElementById('tnotes').value.trim()
+  };
+  if(id){ const i=S.trips.findIndex(t=>t.id===id); S.trips[i]=obj; }
+  else S.trips.push(obj);
+  save(); closeModal('m-trip'); renderTab(S.tab); toast(id?'Trip updated':'Trip added!');
+}
+function deleteTrip() {
+  const id=document.getElementById('tid').value;
+  S.trips=S.trips.filter(t=>t.id!==id);
+  save(); closeModal('m-trip'); renderTab(S.tab); toast('Trip removed');
+}
+
+// ── CHIP TOGGLE ───────────────────────────────────────────────────────
+function toggleChip(btn) { btn.classList.toggle('on'); }
+
+// ── QUICK ACTIONS ─────────────────────────────────────────────────────
+function markSeen(id) {
+  const p=S.people.find(x=>x.id===id);
+  if(!p) return;
+  p.lastSeen=today(); save(); renderHome(); toast(`Marked ${p.name.split(' ')[0]} as seen!`);
+}
+function contactPerson(id) {
+  const p=getPers(id); if(!p) return;
+  const urls={text:`sms:${p.phone}`,call:`tel:${p.phone}`,whatsapp:`https://wa.me/${(p.phone||'').replace(/\D/g,'')}`,email:`mailto:`,instagram:null,'in-person':null};
+  const url=urls[p.cm||'text'];
+  if(url&&p.phone) window.open(url,'_blank');
+  else toast('No contact info saved');
+}
+function planWeekendWith(personId) {
+  const wks=upcomingWeekends(10);
+  const free=wks.find(w=>!S.weekends.find(p=>p.date===w.sat));
+  openWkndModal(free?.sat||wks[0].sat, personId);
+}
+function planWith(personId, actId) {
+  const wks=upcomingWeekends(10);
+  const free=wks.find(w=>!S.weekends.find(p=>p.date===w.sat));
+  openWkndModal(free?.sat||wks[0].sat, personId, actId);
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'), 2400);
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────
+async function requestNotifs() {
+  if(!('Notification' in window)){ toast('Notifications not supported'); return; }
+  const p=await Notification.requestPermission();
+  if(p==='granted'){ toast('Notifications enabled!'); renderHome(); fireOverdueNotifs(); }
+  else toast('Notifications denied');
+}
+function fireOverdueNotifs() {
+  if(Notification.permission!=='granted') return;
+  overduePeople().slice(0,3).forEach((p,i)=>{
+    setTimeout(()=>new Notification('Social Planner 👋',{
+      body:`${p.name} – ${p.ds}d since you last met (${p.overdue}d overdue)`,
+      icon:'./icon.svg', tag:`overdue-${p.id}`
+    }), i*1200);
+  });
+}
+function updateNotifBtn() {
+  const btn=document.getElementById('notif-btn');
+  if(Notification.permission==='granted'){
+    btn.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="4" y1="4" x2="20" y2="20" style="display:none"/></svg>`;
+    btn.title='Notifications active';
+    btn.style.background='var(--green-lt)'; btn.style.color='var(--green)';
+  }
+}
+
+// ── SERVICE WORKER ────────────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      reg.installing?.addEventListener('statechange',()=>{
+        if(reg.installing?.state==='installed'&&navigator.serviceWorker.controller)
+          toast('App updated — refresh to apply');
+      });
+    });
+  }).catch(e=>console.error('SW error',e));
+}
+
+// ── URL PARAM ROUTING ─────────────────────────────────────────────────
+function checkUrlParams() {
+  const p=new URLSearchParams(location.search);
+  const tab=p.get('tab'); const action=p.get('action');
+  if(tab&&TAB_TITLES[tab]){ goTab(tab); if(action==='add') fabTap(); }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+function init() {
+  load();
+  renderHome();
+  updateNotifBtn();
+  checkUrlParams();
+  if(Notification.permission==='granted') setTimeout(fireOverdueNotifs, 2500);
+}
+init();
+</script>
+</body>
+</html>

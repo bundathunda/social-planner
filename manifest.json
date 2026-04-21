@@ -1,0 +1,31 @@
+{
+  "name": "Social Life Planner",
+  "short_name": "SocialPlanner",
+  "description": "Track friends, plan weekends, and never lose touch.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "social"],
+  "shortcuts": [
+    {
+      "name": "Add Person",
+      "url": "./index.html?tab=people&action=add",
+      "description": "Quickly add a new friend"
+    },
+    {
+      "name": "View Suggestions",
+      "url": "./index.html?tab=home",
+      "description": "See who to reach out to"
+    }
+  ]
+}
