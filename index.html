@@ -287,6 +287,12 @@
 
     /* ── Scrollable chip row ───────────────────────────────────────── */
     .act-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+
+    /* ── Emoji picker ──────────────────────────────────────────────── */
+    .emoji-grid { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+    .emoji-opt { font-size:22px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1.5px solid transparent; background:var(--bg); cursor:pointer; transition:all .1s; }
+    .emoji-opt.sel { border-color:var(--primary); background:var(--primary-lt); }
+    .emoji-opt:active { transform:scale(.88); }
   </style>
 </head>
 <body>
@@ -453,23 +459,17 @@
         <label class="fl">Activity Name *</label>
         <input class="fi" id="an" required placeholder="e.g. Hiking, Dinner, Tennis">
       </div>
-      <div class="f2">
-        <div class="fg">
-          <label class="fl">Category</label>
-          <select class="fi" id="acat">
-            <option value="outdoor">🏕️ Outdoor</option>
-            <option value="dining">🍽️ Dining & Drinks</option>
-            <option value="sports">🏃 Sports & Fitness</option>
-            <option value="arts">🎨 Arts & Culture</option>
-            <option value="social">🎲 Social & Games</option>
-            <option value="travel">✈️ Travel</option>
-            <option value="other">⭐ Other</option>
-          </select>
+      <div class="fg">
+        <label class="fl">Emoji</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div id="emoji-display" style="font-size:30px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:10px;border:1.5px solid var(--border);flex-shrink:0;">⭐</div>
+          <input class="fi" id="aemoji" placeholder="Or type any emoji" style="flex:1;">
         </div>
-        <div class="fg">
-          <label class="fl">Goal (days)</label>
-          <input class="fi" id="af" type="number" min="1" max="365" placeholder="30">
-        </div>
+        <div class="emoji-grid" id="emoji-grid"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Goal — every (days)</label>
+        <input class="fi" id="af" type="number" min="1" max="365" placeholder="30">
       </div>
       <input type="hidden" id="aid">
       <div class="f-actions">
@@ -706,7 +706,7 @@ function renderHome() {
             <div style="margin-top:10px;">
               <div style="font-size:11px;color:var(--txt2);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Suggested Activities</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                ${acts.map(a=>`<button class="sel-chip" onclick="planWith('${p.id}','${a.id}')">${catIco(a.cat)} ${a.name}</button>`).join('')}
+                ${acts.map(a=>`<button class="sel-chip" onclick="planWith('${p.id}','${a.id}')">${a.emoji||'⭐'} ${a.name}</button>`).join('')}
               </div>
             </div>` : ''}
           <div style="display:flex;gap:7px;margin-top:10px;">
@@ -729,7 +729,7 @@ function renderHome() {
         <div class="card" style="cursor:default;border-left:3px solid ${uc};">
           <div style="display:flex;align-items:center;justify-content:space-between;">
             <div>
-              <div class="card-title">${catIco(a.cat)} ${a.name}</div>
+              <div class="card-title">${a.emoji||'⭐'} ${a.name}</div>
               <div class="card-sub">Last done ${fmtDate(a.lastDone)} · ${a.overdue}d overdue</div>
             </div>
             <button class="btn btn-sm btn-o" onclick="openActModal(getAct('${a.id}'))">Update</button>
@@ -774,7 +774,7 @@ function renderPeople() {
               ${badge}
             </div>
             <div class="card-sub">${cmIco(p.cm||'text')} ${p.cm||'text'}${p.freq?` · every ${p.freq}d`:''}</div>
-            ${acts.length?`<div class="act-row">${acts.slice(0,4).map(a=>`<span class="chip cn">${catIco(a.cat)} ${a.name}</span>`).join('')}${acts.length>4?`<span class="chip cn">+${acts.length-4}</span>`:''}</div>`:''}
+            ${acts.length?`<div class="act-row">${acts.slice(0,4).map(a=>`<span class="chip cn">${a.emoji||'⭐'} ${a.name}</span>`).join('')}${acts.length>4?`<span class="chip cn">+${acts.length-4}</span>`:''}</div>`:''}
           </div>
         </div>
       </div>`;
@@ -796,7 +796,7 @@ function renderActivities() {
       <div class="card" onclick="openActModal(getAct('${a.id}'))">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="min-width:0;">
-            <div class="card-title">${catIco(a.cat)} ${a.name}</div>
+            <div class="card-title">${a.emoji||'⭐'} ${a.name}</div>
             <div class="card-sub">${cnt} ${cnt===1?'person':'people'}${a.freq?` · goal every ${a.freq}d`:''}</div>
             ${ds!==null?`<div class="card-sub" style="margin-top:2px;">Last done ${fmtDate(a.lastDone)}${over?` <span style="color:var(--red)">· ${ds-a.freq}d overdue</span>`:''}</div>`:''}
           </div>
@@ -821,19 +821,19 @@ function renderWeekends() {
             <span style="font-size:13px;color:var(--txt2);">${label}</span>
             <span class="chip cp">Planned</span>
           </div>
-          <div style="font-size:15px;font-weight:600;margin-bottom:6px;">${act?`${catIco(act.cat)} ${act.name}`:'📅 Weekend plan'}</div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px;">${act?`${act.emoji||'⭐'} ${act.name}`:'📅 Weekend plan'}</div>
           ${ppl.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;">${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${initials(p.name)} ${p.name.split(' ')[0]}</span>`; }).join('')}</div>`:''}
           ${plan.notes?`<div class="card-sub" style="margin-top:6px;">${plan.notes}</div>`:''}
         </div>`;
     }
     return `
-      <div class="wcard" onclick="openWkndModal(${JSON.stringify(w.sat)})">
+      <div class="wcard" onclick="openWkndModal(${JSON.stringify(w.sat)})" style="cursor:pointer;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:13px;color:var(--txt2);">${label}</div>
-            <div style="font-size:14px;color:var(--txt2);margin-top:2px;">Free weekend</div>
+            <div style="font-size:14px;color:var(--txt2);margin-top:2px;">Free — tap to plan</div>
           </div>
-          <button class="btn btn-sm btn-o" onclick="event.stopPropagation();openWkndModal(${JSON.stringify(w.sat)})">+ Plan</button>
+          <span style="font-size:20px;opacity:.4;">›</span>
         </div>
       </div>`;
   }).join('');
@@ -891,6 +891,7 @@ function goTab(tab) {
   document.getElementById('hdr-title').textContent=TAB_TITLES[tab];
   renderTab(tab);
   document.getElementById('main').scrollTop=0;
+  document.getElementById('fab').style.display=tab==='weekends'?'none':'flex';
 }
 function renderTab(tab) {
   if(tab==='home') renderHome();
@@ -936,7 +937,7 @@ function openPersonModal(p=null) {
 
   const chips=document.getElementById('p-act-chips');
   chips.innerHTML=S.activities.length
-    ? S.activities.map(a=>`<button type="button" class="sel-chip ${(p?.activities||[]).includes(a.id)?'on':''}" onclick="toggleChip(this)" data-id="${a.id}">${catIco(a.cat)} ${a.name}</button>`).join('')
+    ? S.activities.map(a=>`<button type="button" class="sel-chip ${(p?.activities||[]).includes(a.id)?'on':''}" onclick="toggleChip(this)" data-id="${a.id}">${a.emoji||'⭐'} ${a.name}</button>`).join('')
     : '<span style="color:var(--txt2);font-size:13px;">Add activities first</span>';
 
   openModal('m-person');
@@ -963,13 +964,30 @@ function deletePerson() {
 }
 
 // ── ACTIVITY MODAL ────────────────────────────────────────────────────
+const EMOJIS=['⭐','🏄','🏊','🚴','🏃','🧗','🎿','🏕️','🎣','🎾','🏓','⚽','🏀','🎮','🎲','🎸','🎵','🎨','🎭','🎬','📚','🍽️','🍕','🍣','🥩','🍺','🍷','☕','🧘','💪','🛹','✈️','🏖️','🌄','🎪','🤿','🎯','🎱','🎉','🌮','🍜','🥗','🧉','🚵','🏋️','🛶','🎻','🥋','🤸','🏇','🧁'];
+function renderEmojiGrid(sel='') {
+  return EMOJIS.map(e=>`<button type="button" class="emoji-opt${e===sel?' sel':''}" onclick="selectEmoji('${e}')" data-e="${e}">${e}</button>`).join('');
+}
+function selectEmoji(e) {
+  document.getElementById('aemoji').value=e;
+  document.getElementById('emoji-display').textContent=e;
+  document.querySelectorAll('.emoji-opt').forEach(b=>b.classList.toggle('sel',b.dataset.e===e));
+}
 function openActModal(a=null) {
   document.getElementById('an').value=a?.name||'';
-  document.getElementById('acat').value=a?.cat||'outdoor';
+  const em=a?.emoji||'';
+  document.getElementById('aemoji').value=em;
+  document.getElementById('emoji-display').textContent=em||'⭐';
   document.getElementById('af').value=a?.freq||'';
   document.getElementById('aid').value=a?.id||'';
   document.getElementById('m-act-title').textContent=a?'Edit Activity':'Add Activity';
   document.getElementById('a-del').style.display=a?'block':'none';
+  document.getElementById('emoji-grid').innerHTML=renderEmojiGrid(em);
+  document.getElementById('aemoji').oninput=function(){
+    const v=[...this.value][0]||'⭐';
+    document.getElementById('emoji-display').textContent=v;
+    document.querySelectorAll('.emoji-opt').forEach(b=>b.classList.toggle('sel',b.dataset.e===v));
+  };
   openModal('m-act');
   setTimeout(()=>document.getElementById('an').focus(),320);
 }
@@ -978,7 +996,7 @@ function saveActivity(e) {
   const id=document.getElementById('aid').value;
   const obj={
     id:id||uid(), name:document.getElementById('an').value.trim(),
-    cat:document.getElementById('acat').value,
+    emoji:[...document.getElementById('aemoji').value][0]||'⭐',
     freq:parseInt(document.getElementById('af').value)||null,
     lastDone: id ? (getAct(id)?.lastDone||null) : null
   };
@@ -1003,7 +1021,7 @@ function openWkndModal(sat, prefPerson=null, prefAct=null) {
 
   const sel=document.getElementById('wa');
   sel.innerHTML='<option value="">— Choose activity —</option>'+
-    S.activities.map(a=>`<option value="${a.id}"${(plan?.actId===a.id||prefAct===a.id)?' selected':''}>${catIco(a.cat)} ${a.name}</option>`).join('');
+    S.activities.map(a=>`<option value="${a.id}"${(plan?.actId===a.id||prefAct===a.id)?' selected':''}>${a.emoji||'⭐'} ${a.name}</option>`).join('');
 
   const selPpl=plan?.pplIds||(prefPerson?[prefPerson]:[]);
   document.getElementById('w-ppl-chips').innerHTML=S.people.length
