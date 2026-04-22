@@ -646,6 +646,11 @@ async function loadFromDB() {
     SB.from('weekends').select('data'),
     SB.from('trips').select('data'),
   ]);
+  if(p.error || a.error || w.error || t.error) {
+    toast('Could not load data — check connection');
+    console.error('loadFromDB errors:', p.error, a.error, w.error, t.error);
+    return; // don't wipe existing state on failure
+  }
   S.people     = p.data?.map(r=>r.data) || [];
   S.activities = a.data?.map(r=>r.data) || [];
   S.weekends   = w.data?.map(r=>r.data) || [];
@@ -1405,12 +1410,9 @@ function checkUrlParams() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────
+let _signingIn = false;
 async function init() {
-  // Listen for auth changes (handles magic links / session restore)
-  SB.auth.onAuthStateChange(async (event, session) => {
-    if(event==='SIGNED_IN' && !S.userId) await onSignIn(session);
-  });
-  // Check for existing session
+  // Check for existing session first, then listen for future changes
   const {data:{session}} = await SB.auth.getSession();
   if(session) {
     await onSignIn(session);
@@ -1418,6 +1420,16 @@ async function init() {
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('app').style.display='none';
   }
+  // Listen for future sign-in/sign-out events (token refresh, etc.)
+  SB.auth.onAuthStateChange(async (event, session) => {
+    if(event==='SIGNED_IN' && !S.userId && !_signingIn) {
+      _signingIn = true;
+      await onSignIn(session);
+      _signingIn = false;
+    } else if(event==='SIGNED_OUT') {
+      S.userId = null;
+    }
+  });
   checkUrlParams();
 }
 init();
