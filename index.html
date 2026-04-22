@@ -10,6 +10,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
   <title>Social Planner</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     /* ── Variables & Reset ─────────────────────────────────────────── */
     :root {
@@ -305,17 +306,41 @@
   </style>
 </head>
 <body>
+<!-- ── Auth Screen ───────────────────────────────────────────────── -->
+<div id="auth-screen" style="display:none;position:fixed;inset:0;background:var(--surface);z-index:1000;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;">
+  <img src="icon.svg" style="width:72px;height:72px;border-radius:18px;margin-bottom:20px;">
+  <h1 style="font-size:26px;font-weight:800;margin-bottom:8px;">Social Planner</h1>
+  <p style="color:var(--txt2);margin-bottom:36px;text-align:center;font-size:15px;">Sign in to sync your data across devices</p>
+
+  <div id="auth-step1" style="width:100%;max-width:320px;">
+    <input type="email" class="fi" id="auth-email" placeholder="your@email.com" style="margin-bottom:12px;font-size:16px;text-align:center;">
+    <button class="btn btn-p" style="width:100%;padding:13px;" onclick="sendOtp()">Send Code</button>
+  </div>
+
+  <div id="auth-step2" style="display:none;width:100%;max-width:320px;text-align:center;">
+    <p style="color:var(--txt2);font-size:14px;margin-bottom:16px;">Enter the 6-digit code sent to<br><strong id="auth-email-shown"></strong></p>
+    <input type="text" class="fi" id="auth-otp" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:24px;text-align:center;letter-spacing:.2em;margin-bottom:12px;">
+    <button class="btn btn-p" style="width:100%;padding:13px;" onclick="verifyOtp()">Verify</button>
+    <button class="btn btn-o" style="width:100%;padding:10px;margin-top:8px;" onclick="showAuthStep(1)">Back</button>
+  </div>
+
+  <div id="auth-status" style="color:var(--red);font-size:13px;margin-top:12px;text-align:center;"></div>
+</div>
+
 <div id="app">
 
   <!-- ── Header ─────────────────────────────────────────────────── -->
   <header class="hdr">
     <h1 id="hdr-title">Suggestions</h1>
-    <button class="hdr-btn" id="notif-btn" onclick="requestNotifs()" title="Enable notifications">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-      </svg>
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="hdr-btn" id="notif-btn" onclick="requestNotifs()" title="Enable notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </button>
+      <button class="hdr-btn" id="user-btn" onclick="confirmSignOut()" title="Sign out" style="display:none;font-weight:700;font-size:15px;"></button>
+    </div>
   </header>
 
   <!-- ── Tab Content ───────────────────────────────────────────── -->
@@ -609,21 +634,92 @@
 
 <!-- ═══════════════ JAVASCRIPT ════════════════════════════════════════ -->
 <script>
-// ── State ─────────────────────────────────────────────────────────────
-let S = { people:[], activities:[], weekends:[], trips:[], tab:'home' };
+// ── Supabase ──────────────────────────────────────────────────────────
+const SB = window.supabase.createClient(
+  'https://xrsojdkiedrkvfmmbuuf.supabase.co',
+  'sb_publishable_Sgfh0srpyXkPuq2-7tDzFg_A1UFeZ5F'
+);
 
-// ── Persistence ───────────────────────────────────────────────────────
-const STORE = 'slp_v1';
-function save() { localStorage.setItem(STORE, JSON.stringify(S)); }
-function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem(STORE) || '{}');
-    S.people     = d.people     || [];
-    S.activities = d.activities || [];
-    S.weekends   = d.weekends   || [];
-    S.trips      = d.trips      || [];
-  } catch(_) {}
+// ── State ─────────────────────────────────────────────────────────────
+let S = { people:[], activities:[], weekends:[], trips:[], tab:'home', userId:null, userEmail:null };
+
+// ── Data sync ─────────────────────────────────────────────────────────
+async function loadFromDB() {
+  const [p,a,w,t] = await Promise.all([
+    SB.from('people').select('data'),
+    SB.from('activities').select('data'),
+    SB.from('weekends').select('data'),
+    SB.from('trips').select('data'),
+  ]);
+  S.people     = p.data?.map(r=>r.data) || [];
+  S.activities = a.data?.map(r=>r.data) || [];
+  S.weekends   = w.data?.map(r=>r.data) || [];
+  S.trips      = t.data?.map(r=>r.data) || [];
 }
+async function upsert(table, obj) {
+  const arr = S[table];
+  const i = arr.findIndex(x=>x.id===obj.id);
+  if(i>=0) arr[i]=obj; else arr.push(obj);
+  const {error} = await SB.from(table).upsert({id:obj.id, user_id:S.userId, data:obj});
+  if(error) toast('Sync error — check connection');
+}
+async function remove(table, id) {
+  S[table] = S[table].filter(x=>x.id!==id);
+  const {error} = await SB.from(table).delete().eq('id',id);
+  if(error) toast('Sync error — check connection');
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────
+function showAuthStep(n) {
+  document.getElementById('auth-step1').style.display = n===1?'block':'none';
+  document.getElementById('auth-step2').style.display = n===2?'block':'none';
+  document.getElementById('auth-status').textContent = '';
+}
+async function sendOtp() {
+  const email = document.getElementById('auth-email').value.trim();
+  if(!email){ document.getElementById('auth-status').textContent='Enter your email'; return; }
+  document.getElementById('auth-status').textContent = 'Sending…';
+  const {error} = await SB.auth.signInWithOtp({email, options:{shouldCreateUser:true}});
+  if(error){ document.getElementById('auth-status').textContent=error.message; return; }
+  document.getElementById('auth-email-shown').textContent = email;
+  showAuthStep(2);
+  setTimeout(()=>document.getElementById('auth-otp').focus(), 100);
+}
+async function verifyOtp() {
+  const email = document.getElementById('auth-email').value.trim();
+  const token = document.getElementById('auth-otp').value.trim();
+  if(token.length<6){ document.getElementById('auth-status').textContent='Enter the 6-digit code'; return; }
+  document.getElementById('auth-status').textContent = 'Verifying…';
+  const {data,error} = await SB.auth.verifyOtp({email, token, type:'email'});
+  if(error){ document.getElementById('auth-status').textContent='Invalid code — try again'; return; }
+  await onSignIn(data.session);
+}
+async function onSignIn(session) {
+  S.userId    = session.user.id;
+  S.userEmail = session.user.email;
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  const btn = document.getElementById('user-btn');
+  btn.textContent = S.userEmail[0].toUpperCase();
+  btn.style.display = 'flex';
+  await loadFromDB();
+  renderHome();
+  updateNotifBtn();
+  if(Notification.permission==='granted') setTimeout(fireOverdueNotifs,2500);
+}
+function confirmSignOut() {
+  if(confirm(`Sign out of ${S.userEmail}?`)) signOut();
+}
+async function signOut() {
+  await SB.auth.signOut();
+  S.people=[]; S.activities=[]; S.weekends=[]; S.trips=[];
+  S.userId=null; S.userEmail=null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('user-btn').style.display = 'none';
+  showAuthStep(1);
+}
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 // ── Date utils ────────────────────────────────────────────────────────
@@ -1088,7 +1184,7 @@ function openPersonModal(p=null) {
   openModal('m-person');
   setTimeout(()=>document.getElementById('pn').focus(),320);
 }
-function savePerson(e) {
+async function savePerson(e) {
   e.preventDefault();
   const id=document.getElementById('pid').value;
   const acts=[...document.querySelectorAll('#p-act-chips .sel-chip.on')].map(c=>c.dataset.id);
@@ -1098,14 +1194,13 @@ function savePerson(e) {
     freq:parseInt(document.getElementById('pf').value)||14,
     lastSeen:document.getElementById('pls').value, activities:acts
   };
-  if(id){ const i=S.people.findIndex(p=>p.id===id); S.people[i]=obj; }
-  else S.people.push(obj);
-  save(); closeModal('m-person'); renderTab(S.tab); toast(id?'Person updated':'Person added');
+  closeModal('m-person'); renderTab(S.tab); toast(id?'Person updated':'Person added');
+  await upsert('people', obj);
 }
-function deletePerson() {
+async function deletePerson() {
   const id=document.getElementById('pid').value;
-  S.people=S.people.filter(p=>p.id!==id);
-  save(); closeModal('m-person'); renderTab(S.tab); toast('Person removed');
+  closeModal('m-person'); renderTab(S.tab); toast('Person removed');
+  await remove('people', id);
 }
 
 // ── ACTIVITY MODAL ────────────────────────────────────────────────────
@@ -1120,7 +1215,7 @@ function openActModal(a=null) {
   openModal('m-act');
   setTimeout(()=>document.getElementById('an').focus(),320);
 }
-function saveActivity(e) {
+async function saveActivity(e) {
   e.preventDefault();
   const id=document.getElementById('aid').value;
   const obj={
@@ -1130,15 +1225,15 @@ function saveActivity(e) {
     freq:parseInt(document.getElementById('af').value)||null,
     lastDone: id ? (getAct(id)?.lastDone||null) : null
   };
-  if(id){ const i=S.activities.findIndex(a=>a.id===id); S.activities[i]=obj; }
-  else S.activities.push(obj);
-  save(); closeModal('m-act'); renderTab(S.tab); toast(id?'Activity updated':'Activity added');
+  closeModal('m-act'); renderTab(S.tab); toast(id?'Activity updated':'Activity added');
+  await upsert('activities', obj);
 }
-function deleteActivity() {
+async function deleteActivity() {
   const id=document.getElementById('aid').value;
-  S.activities=S.activities.filter(a=>a.id!==id);
   S.people=S.people.map(p=>({...p,activities:(p.activities||[]).filter(x=>x!==id)}));
-  save(); closeModal('m-act'); renderTab(S.tab); toast('Activity removed');
+  closeModal('m-act'); renderTab(S.tab); toast('Activity removed');
+  await remove('activities', id);
+  await Promise.all(S.people.map(p=>upsert('people',p)));
 }
 
 // ── WEEKEND MODAL ─────────────────────────────────────────────────────
@@ -1185,20 +1280,19 @@ function getDayData(prefix) {
     notes: document.getElementById(`${prefix}-notes`).value.trim()
   };
 }
-function saveWeekend() {
+async function saveWeekend() {
   const id=document.getElementById('wid').value;
   const fri=getDayData('fri'), sat=getDayData('sat'), sun=getDayData('sun');
   const hasAny=fri.actId||sat.actId||sun.actId||fri.notes||sat.notes||sun.notes;
   if(!hasAny){ closeModal('m-wknd'); return; }
   const obj={ id:id||uid(), date:document.getElementById('wd').value, fri, sat, sun };
-  if(id){ const i=S.weekends.findIndex(w=>w.id===id); S.weekends[i]=obj; }
-  else S.weekends.push(obj);
-  save(); closeModal('m-wknd'); renderTab(S.tab); toast('Weekend saved!');
+  closeModal('m-wknd'); renderTab(S.tab); toast('Weekend saved!');
+  await upsert('weekends', obj);
 }
-function deleteWeekend() {
+async function deleteWeekend() {
   const id=document.getElementById('wid').value;
-  S.weekends=S.weekends.filter(w=>w.id!==id);
-  save(); closeModal('m-wknd'); renderTab(S.tab); toast('Weekend cleared');
+  closeModal('m-wknd'); renderTab(S.tab); toast('Weekend cleared');
+  await remove('weekends', id);
 }
 
 // ── TRIP MODAL ────────────────────────────────────────────────────────
@@ -1219,7 +1313,7 @@ function openTripModal(t=null) {
   openModal('m-trip');
   setTimeout(()=>document.getElementById('tdest').focus(),320);
 }
-function saveTrip(e) {
+async function saveTrip(e) {
   e.preventDefault();
   const id=document.getElementById('tid').value;
   const ppl=[...document.querySelectorAll('#t-ppl-chips .sel-chip.on')].map(c=>c.dataset.id);
@@ -1229,24 +1323,24 @@ function saveTrip(e) {
     stat:document.getElementById('tstat').value, pplIds:ppl,
     notes:document.getElementById('tnotes').value.trim()
   };
-  if(id){ const i=S.trips.findIndex(t=>t.id===id); S.trips[i]=obj; }
-  else S.trips.push(obj);
-  save(); closeModal('m-trip'); renderTab(S.tab); toast(id?'Trip updated':'Trip added!');
+  closeModal('m-trip'); renderTab(S.tab); toast(id?'Trip updated':'Trip added!');
+  await upsert('trips', obj);
 }
-function deleteTrip() {
+async function deleteTrip() {
   const id=document.getElementById('tid').value;
-  S.trips=S.trips.filter(t=>t.id!==id);
-  save(); closeModal('m-trip'); renderTab(S.tab); toast('Trip removed');
+  closeModal('m-trip'); renderTab(S.tab); toast('Trip removed');
+  await remove('trips', id);
 }
 
 // ── CHIP TOGGLE ───────────────────────────────────────────────────────
 function toggleChip(btn) { btn.classList.toggle('on'); }
 
 // ── QUICK ACTIONS ─────────────────────────────────────────────────────
-function markSeen(id) {
+async function markSeen(id) {
   const p=S.people.find(x=>x.id===id);
   if(!p) return;
-  p.lastSeen=today(); save(); renderHome(); toast(`Marked ${p.name.split(' ')[0]} as seen!`);
+  p.lastSeen=today(); renderHome(); toast(`Marked ${p.name.split(' ')[0]} as seen!`);
+  await upsert('people', p);
 }
 function contactPerson(id) {
   const p=getPers(id); if(!p) return;
@@ -1320,12 +1414,20 @@ function checkUrlParams() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────
-function init() {
-  load();
-  renderHome();
-  updateNotifBtn();
+async function init() {
+  // Listen for auth changes (handles magic links / session restore)
+  SB.auth.onAuthStateChange(async (event, session) => {
+    if(event==='SIGNED_IN' && !S.userId) await onSignIn(session);
+  });
+  // Check for existing session
+  const {data:{session}} = await SB.auth.getSession();
+  if(session) {
+    await onSignIn(session);
+  } else {
+    document.getElementById('auth-screen').style.display='flex';
+    document.getElementById('app').style.display='none';
+  }
   checkUrlParams();
-  if(Notification.permission==='granted') setTimeout(fireOverdueNotifs, 2500);
 }
 init();
 </script>
