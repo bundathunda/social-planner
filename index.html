@@ -289,6 +289,11 @@
     /* ── Scrollable chip row ───────────────────────────────────────── */
     .act-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 
+    /* ── Suggestion cards ──────────────────────────────────────────── */
+    .sugg-card { border-radius:14px; padding:14px 16px; margin-bottom:11px; border:1.5px solid var(--border); }
+    .sugg-tag { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; margin-bottom:6px; }
+    .sugg-actions { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; }
+
     /* ── Day section label ─────────────────────────────────────────── */
     .day-lbl { font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
 
@@ -320,14 +325,8 @@
     <div id="t-home" class="tab active">
       <div class="stats" id="stats-row"></div>
       <div id="notif-prompt"></div>
-      <div class="sec-hdr">
-        <span class="sec-title">Overdue Connections</span>
-      </div>
-      <div id="recs-list"></div>
-      <div class="sec-hdr" style="margin-top:20px">
-        <span class="sec-title">Overdue Activities</span>
-      </div>
-      <div id="act-recs-list"></div>
+      <div class="sec-hdr"><span class="sec-title">Suggestions</span></div>
+      <div id="suggestions-list"></div>
     </div>
 
     <!-- PEOPLE -->
@@ -692,92 +691,189 @@ function urgencyLabel(days) {
   return 'Due soon';
 }
 
+// ── SUGGESTIONS ENGINE ────────────────────────────────────────────────
+function getSuggestions() {
+  const suggs=[]; const t=today(); const dow=parseD(t).getDay();
+
+  // 1. Overdue people (one card each, sorted by urgency)
+  overduePeople().forEach(p=>{
+    suggs.push({ type:'person', pri: p.overdue>30?0:p.overdue>14?1:2, p });
+  });
+
+  // 2. This weekend unplanned — show from Wednesday onward
+  if(dow>=3){
+    const wks=upcomingWeekends(1);
+    const plan=S.weekends.find(p=>p.date===wks[0].sat);
+    const isPlanned=plan&&(plan.fri?.actId||plan.sat?.actId||plan.sun?.actId);
+    if(!isPlanned) suggs.push({ type:'weekend', pri:dow>=5?0:1, wknd:wks[0], dow });
+  }
+
+  // 3. Approaching confirmed trip (within 30 days)
+  S.trips.filter(tr=>tr.stat==='confirmed'&&tr.start).forEach(trip=>{
+    const until=daysBetween(t,trip.start);
+    if(until>=0&&until<=30) suggs.push({ type:'trip-soon', pri:until<=7?0:1, trip, until });
+  });
+
+  // 4. No trips planned or confirmed in next 90 days
+  const nearTrip=S.trips.some(tr=>
+    tr.start&&(tr.stat==='planning'||tr.stat==='confirmed')&&
+    daysBetween(t,tr.start)>=0&&daysBetween(t,tr.start)<=90
+  );
+  if(!nearTrip&&S.people.length>=2) suggs.push({ type:'no-trip', pri:4 });
+
+  // 5. Overdue activities
+  overdueActivities().forEach(a=>{
+    suggs.push({ type:'activity', pri:a.overdue>30?2:3, a });
+  });
+
+  // 6. People with no last-seen date set
+  const noDate=S.people.filter(p=>!p.lastSeen);
+  if(noDate.length) suggs.push({ type:'no-date', pri:5, people:noDate });
+
+  return suggs.sort((a,b)=>a.pri-b.pri);
+}
+
+function renderSuggestion(s) {
+  if(s.type==='person')    return renderPersonSugg(s.p);
+  if(s.type==='weekend')   return renderWeekendSugg(s);
+  if(s.type==='trip-soon') return renderTripSoonSugg(s);
+  if(s.type==='no-trip')   return renderNoTripSugg();
+  if(s.type==='activity')  return renderActivitySugg(s.a);
+  if(s.type==='no-date')   return renderNoDateSugg(s.people);
+  return '';
+}
+
+function renderPersonSugg(p) {
+  const [bg,fg]=avCol(p.name);
+  const acts=(p.activities||[]).map(getAct).filter(Boolean);
+  const uc=urgencyColor(p.overdue);
+  return `
+    <div class="rec-card" style="background:linear-gradient(135deg,${bg}66,${bg}aa);border-color:${fg}30;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        <div class="rec-dot" style="background:${uc}"></div>
+        <span style="font-size:12px;color:${uc};font-weight:700;">${urgencyLabel(p.overdue)} · ${p.overdue}d overdue</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;">
+        <div class="av" style="background:${bg};color:${fg};width:42px;height:42px;font-size:16px;">${initials(p.name)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="card-title">${p.name}</div>
+          <div class="card-sub">Last seen ${fmtDate(p.lastSeen)} · ${p.ds}d ago</div>
+        </div>
+        <button class="btn btn-sm btn-p" onclick="markSeen('${p.id}')">Seen ✓</button>
+      </div>
+      <div class="pbar"><div class="pbar-fill" style="width:${p.pct}%;background:${uc};"></div></div>
+      ${acts.length?`
+        <div style="margin-top:10px;">
+          <div style="font-size:11px;color:var(--txt2);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Suggested Activities</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${acts.map(a=>`<button class="sel-chip" onclick="planWith('${p.id}','${a.id}')">${a.emoji||'⭐'} ${a.name}</button>`).join('')}
+          </div>
+        </div>`:''}
+      <div class="sugg-actions">
+        <button class="btn btn-sm btn-o" onclick="contactPerson('${p.id}')" style="flex:1">${cmIco(p.cm)} Reach out</button>
+        <button class="btn btn-sm btn-o" onclick="planWeekendWith('${p.id}')" style="flex:1">📅 Plan weekend</button>
+      </div>
+    </div>`;
+}
+
+function renderWeekendSugg(s) {
+  const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][s.dow];
+  const daysLeft=6-s.dow;
+  const urgency=s.dow>=5?'border-color:#fca5a5;background:#fff1f2;':'border-color:#fed7aa;background:#fff7ed;';
+  const tagColor=s.dow>=5?'#dc2626':'#ea580c';
+  return `
+    <div class="sugg-card" style="${urgency}">
+      <div class="sugg-tag" style="color:${tagColor};">📅 Plan this weekend</div>
+      <div class="card-title">This weekend has no plans</div>
+      <div class="card-sub">It's ${dayName} — ${daysLeft===1?'only 1 day':daysLeft+' days'} to go. Lock something in?</div>
+      <div class="sugg-actions">
+        <button class="btn btn-sm btn-p" onclick="goTab('weekends')">Go to weekends →</button>
+      </div>
+    </div>`;
+}
+
+function renderTripSoonSugg(s) {
+  return `
+    <div class="sugg-card" style="border-color:#6ee7b7;background:#ecfdf5;">
+      <div class="sugg-tag" style="color:#059669;">✈️ Upcoming Trip</div>
+      <div class="card-title">${s.trip.dest} is in ${s.until} day${s.until===1?'':'s'}</div>
+      <div class="card-sub">${fmtDate(s.trip.start)}${s.trip.end?` – ${fmtDate(s.trip.end)}`:''} · Confirmed</div>
+      <div class="sugg-actions">
+        <button class="btn btn-sm btn-o" onclick="openTripModal(getTrip('${s.trip.id}'))">View trip →</button>
+      </div>
+    </div>`;
+}
+
+function renderNoTripSugg() {
+  return `
+    <div class="sugg-card" style="border-color:#bfdbfe;background:#eff6ff;">
+      <div class="sugg-tag" style="color:#2563eb;">✈️ Travel</div>
+      <div class="card-title">Nothing planned in the next 90 days</div>
+      <div class="card-sub">No trips confirmed or in planning. Time to put something on the horizon?</div>
+      <div class="sugg-actions">
+        <button class="btn btn-sm btn-p" onclick="goTab('trips');setTimeout(openTripModal,100)">Plan a trip →</button>
+      </div>
+    </div>`;
+}
+
+function renderActivitySugg(a) {
+  const ppl=S.people.filter(p=>(p.activities||[]).includes(a.id));
+  const uc=urgencyColor(a.overdue);
+  return `
+    <div class="sugg-card" style="border-left:3px solid ${uc};border-radius:14px;">
+      <div class="sugg-tag" style="color:${uc};">🏃 Overdue Activity</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div>
+          <div class="card-title">${a.emoji||'⭐'} ${a.name}</div>
+          <div class="card-sub">Last done ${fmtDate(a.lastDone)} · ${a.overdue}d overdue</div>
+        </div>
+        <button class="btn btn-sm btn-o" onclick="openActModal(getAct('${a.id}'))">Update</button>
+      </div>
+      ${ppl.length?`<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${p.name.split(' ')[0]}</span>`; }).join('')}</div>`:''}
+    </div>`;
+}
+
+function renderNoDateSugg(people) {
+  return `
+    <div class="sugg-card" style="border-color:#e5e7eb;background:#f9fafb;">
+      <div class="sugg-tag" style="color:var(--txt2);">👤 Setup needed</div>
+      <div class="card-title">${people.length} ${people.length===1?'person has':'people have'} no last-seen date</div>
+      <div class="card-sub">Without a date, the app can't tell if you're overdue.</div>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
+        ${people.map(p=>{ const [b,f]=avCol(p.name); return `<button class="sel-chip" style="background:${b};color:${f};border-color:transparent;" onclick="openPersonModal(getPers('${p.id}'))">${p.name.split(' ')[0]}</button>`; }).join('')}
+      </div>
+    </div>`;
+}
+
 // ── RENDER: HOME ──────────────────────────────────────────────────────
 function renderHome() {
-  const od=overduePeople(); const oda=overdueActivities();
+  const od=overduePeople();
   const planned=S.weekends.filter(w=>w.date>=today()&&(w.fri?.actId||w.sat?.actId||w.sun?.actId)).length;
 
-  // Stats
   document.getElementById('stats-row').innerHTML=`
     <div class="stat"><div class="stat-v">${S.people.length}</div><div class="stat-l">People</div></div>
     <div class="stat"><div class="stat-v" style="color:${od.length?'var(--accent)':'var(--green)'}">${od.length}</div><div class="stat-l">Overdue</div></div>
     <div class="stat"><div class="stat-v" style="color:var(--green)">${planned}</div><div class="stat-l">Planned</div></div>
   `;
 
-  // Notification prompt
-  const nb=document.getElementById('notif-prompt');
-  nb.innerHTML = Notification.permission==='default' ? `
+  document.getElementById('notif-prompt').innerHTML=Notification.permission==='default'?`
     <div class="notif-banner">
       <span style="font-size:20px">🔔</span>
       <p>Get reminders when friends go overdue.</p>
       <button class="btn btn-sm btn-p" onclick="requestNotifs()">Enable</button>
-    </div>` : '';
+    </div>`:'';
 
-  // People recs
-  const rl=document.getElementById('recs-list');
-  if(od.length===0) {
-    rl.innerHTML=S.people.length===0
-      ? `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h3>No people yet</h3><p>Tap + to add your first friend</p></div>`
-      : `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><h3>All caught up!</h3><p>No overdue connections right now.</p></div>`;
-  } else {
-    rl.innerHTML=od.map(p=>{
-      const [bg,fg]=avCol(p.name);
-      const acts=(p.activities||[]).map(getAct).filter(Boolean);
-      const uc=urgencyColor(p.overdue);
-      return `
-        <div class="rec-card" style="background:linear-gradient(135deg,${bg}66,${bg}aa);border-color:${fg}30;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-            <div class="rec-dot" style="background:${uc}"></div>
-            <span style="font-size:12px;color:${uc};font-weight:700;">${urgencyLabel(p.overdue)} · ${p.overdue}d overdue</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:11px;">
-            <div class="av" style="background:${bg};color:${fg};width:42px;height:42px;font-size:16px;">${initials(p.name)}</div>
-            <div style="flex:1;min-width:0;">
-              <div class="card-title">${p.name}</div>
-              <div class="card-sub">Last seen ${fmtDate(p.lastSeen)} · ${p.ds}d ago</div>
-            </div>
-            <button class="btn btn-sm btn-p" onclick="markSeen('${p.id}')">Seen ✓</button>
-          </div>
-          <div class="pbar"><div class="pbar-fill" style="width:${p.pct}%;background:${uc};"></div></div>
-          ${acts.length ? `
-            <div style="margin-top:10px;">
-              <div style="font-size:11px;color:var(--txt2);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Suggested Activities</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                ${acts.map(a=>`<button class="sel-chip" onclick="planWith('${p.id}','${a.id}')">${a.emoji||'⭐'} ${a.name}</button>`).join('')}
-              </div>
-            </div>` : ''}
-          <div style="display:flex;gap:7px;margin-top:10px;">
-            <button class="btn btn-sm btn-o" onclick="contactPerson('${p.id}')" style="flex:1">${cmIco(p.cm)} Reach out</button>
-            <button class="btn btn-sm btn-o" onclick="planWeekendWith('${p.id}')" style="flex:1">📅 Plan weekend</button>
-          </div>
-        </div>`;
-    }).join('');
+  const suggs=getSuggestions();
+  const list=document.getElementById('suggestions-list');
+
+  if(!suggs.length){
+    list.innerHTML=S.people.length===0
+      ?`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h3>No people yet</h3><p>Tap + to add your first friend</p></div>`
+      :`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><h3>All clear!</h3><p>No suggestions right now — you're on top of it.</p></div>`;
+    return;
   }
 
-  // Activity recs
-  const al=document.getElementById('act-recs-list');
-  if(oda.length===0) {
-    al.innerHTML=`<div style="color:var(--txt2);font-size:14px;padding:4px 0 8px;">No overdue activities.</div>`;
-  } else {
-    al.innerHTML=oda.map(a=>{
-      const ppl=S.people.filter(p=>(p.activities||[]).includes(a.id));
-      const uc=urgencyColor(a.overdue);
-      return `
-        <div class="card" style="cursor:default;border-left:3px solid ${uc};">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <div class="card-title">${a.emoji||'⭐'} ${a.name}</div>
-              <div class="card-sub">Last done ${fmtDate(a.lastDone)} · ${a.overdue}d overdue</div>
-            </div>
-            <button class="btn btn-sm btn-o" onclick="openActModal(getAct('${a.id}'))">Update</button>
-          </div>
-          ${ppl.length ? `
-            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
-              ${ppl.map(p=>{ const [b,f]=avCol(p.name); return `<span class="ppill" style="background:${b};color:${f};">${p.name.split(' ')[0]}</span>`; }).join('')}
-            </div>` : ''}
-        </div>`;
-    }).join('');
-  }
+  list.innerHTML=suggs.map(renderSuggestion).join('');
 }
 
 // ── RENDER: PEOPLE ────────────────────────────────────────────────────
