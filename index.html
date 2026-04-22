@@ -312,19 +312,14 @@
   <h1 style="font-size:26px;font-weight:800;margin-bottom:8px;">Social Planner</h1>
   <p style="color:var(--txt2);margin-bottom:36px;text-align:center;font-size:15px;">Sign in to sync your data across devices</p>
 
-  <div id="auth-step1" style="width:100%;max-width:320px;">
-    <input type="email" class="fi" id="auth-email" placeholder="your@email.com" style="margin-bottom:12px;font-size:16px;text-align:center;">
-    <button class="btn btn-p" style="width:100%;padding:13px;" onclick="sendOtp()">Send Code</button>
+  <div style="width:100%;max-width:320px;">
+    <input type="email" class="fi" id="auth-email" placeholder="your@email.com" style="margin-bottom:10px;font-size:16px;">
+    <input type="password" class="fi" id="auth-password" placeholder="Password (min 6 chars)" style="margin-bottom:12px;font-size:16px;">
+    <button class="btn btn-p" style="width:100%;padding:13px;margin-bottom:8px;" onclick="signIn()">Sign In</button>
+    <button class="btn btn-o" style="width:100%;padding:11px;" onclick="signUp()">Create Account</button>
   </div>
 
-  <div id="auth-step2" style="display:none;width:100%;max-width:320px;text-align:center;">
-    <p style="color:var(--txt2);font-size:14px;margin-bottom:16px;">Enter the 6-digit code sent to<br><strong id="auth-email-shown"></strong></p>
-    <input type="text" class="fi" id="auth-otp" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:24px;text-align:center;letter-spacing:.2em;margin-bottom:12px;">
-    <button class="btn btn-p" style="width:100%;padding:13px;" onclick="verifyOtp()">Verify</button>
-    <button class="btn btn-o" style="width:100%;padding:10px;margin-top:8px;" onclick="showAuthStep(1)">Back</button>
-  </div>
-
-  <div id="auth-status" style="color:var(--red);font-size:13px;margin-top:12px;text-align:center;"></div>
+  <div id="auth-status" style="color:var(--red);font-size:13px;margin-top:12px;text-align:center;max-width:320px;"></div>
 </div>
 
 <div id="app">
@@ -670,29 +665,25 @@ async function remove(table, id) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────
-function showAuthStep(n) {
-  document.getElementById('auth-step1').style.display = n===1?'block':'none';
-  document.getElementById('auth-step2').style.display = n===2?'block':'none';
-  document.getElementById('auth-status').textContent = '';
-}
-async function sendOtp() {
+async function signIn() {
   const email = document.getElementById('auth-email').value.trim();
-  if(!email){ document.getElementById('auth-status').textContent='Enter your email'; return; }
-  document.getElementById('auth-status').textContent = 'Sending…';
-  const {error} = await SB.auth.signInWithOtp({email, options:{shouldCreateUser:true}});
+  const password = document.getElementById('auth-password').value;
+  if(!email || !password){ document.getElementById('auth-status').textContent='Enter email and password'; return; }
+  document.getElementById('auth-status').textContent = 'Signing in…';
+  const {data, error} = await SB.auth.signInWithPassword({email, password});
   if(error){ document.getElementById('auth-status').textContent=error.message; return; }
-  document.getElementById('auth-email-shown').textContent = email;
-  showAuthStep(2);
-  setTimeout(()=>document.getElementById('auth-otp').focus(), 100);
-}
-async function verifyOtp() {
-  const email = document.getElementById('auth-email').value.trim();
-  const token = document.getElementById('auth-otp').value.trim();
-  if(token.length<6){ document.getElementById('auth-status').textContent='Enter the 6-digit code'; return; }
-  document.getElementById('auth-status').textContent = 'Verifying…';
-  const {data,error} = await SB.auth.verifyOtp({email, token, type:'email'});
-  if(error){ document.getElementById('auth-status').textContent='Invalid code — try again'; return; }
   await onSignIn(data.session);
+}
+async function signUp() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if(!email){ document.getElementById('auth-status').textContent='Enter your email'; return; }
+  if(password.length < 6){ document.getElementById('auth-status').textContent='Password must be at least 6 characters'; return; }
+  document.getElementById('auth-status').textContent = 'Creating account…';
+  const {data, error} = await SB.auth.signUp({email, password});
+  if(error){ document.getElementById('auth-status').textContent=error.message; return; }
+  if(data.session) await onSignIn(data.session);
+  else document.getElementById('auth-status').textContent='Account created! Sign in now.';
 }
 async function onSignIn(session) {
   S.userId    = session.user.id;
@@ -717,7 +708,7 @@ async function signOut() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('user-btn').style.display = 'none';
-  showAuthStep(1);
+  document.getElementById('auth-status').textContent = '';
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
