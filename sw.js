@@ -1,4 +1,4 @@
-const CACHE_NAME = 'social-planner-v1';
+const CACHE_NAME = 'social-planner-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
