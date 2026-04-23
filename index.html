@@ -446,15 +446,9 @@
           </select>
         </div>
       </div>
-      <div class="f2">
-        <div class="fg">
-          <label class="fl">See every (days)</label>
-          <input class="fi" id="pf" type="number" min="1" max="365" placeholder="14" value="14">
-        </div>
-        <div class="fg">
-          <label class="fl">Last seen</label>
-          <input class="fi" id="pls" type="date">
-        </div>
+      <div class="fg">
+        <label class="fl">See every (days)</label>
+        <input class="fi" id="pf" type="number" min="1" max="365" placeholder="14" value="14">
       </div>
       <div class="fg">
         <label class="fl">Shared Activities</label>
@@ -588,7 +582,7 @@
       <div class="f2">
         <div class="fg">
           <label class="fl">Start Date</label>
-          <input class="fi" id="tstart" type="date">
+          <input class="fi" id="tstart" type="date" onchange="syncTripEndDate()">
         </div>
         <div class="fg">
           <label class="fl">End Date</label>
@@ -752,6 +746,27 @@ function initials(name) { return name.split(' ').map(w=>w[0]).slice(0,2).join(''
 // ── Lookups ───────────────────────────────────────────────────────────
 const getAct  = id => S.activities.find(a=>a.id===id);
 const getPers = id => S.people.find(p=>p.id===id);
+const getTrip = id => S.trips.find(t=>t.id===id);
+
+// ── Person plan info (calculated from weekends) ───────────────────────
+function addDays(dateStr, n) {
+  const d = parseD(dateStr); d.setDate(d.getDate()+n);
+  return d.toISOString().split('T')[0];
+}
+function personPlanInfo(personId) {
+  const t = today(); const dates = [];
+  S.weekends.forEach(w => {
+    if ((w.fri?.pplIds||[]).includes(personId)) dates.push(addDays(w.date,-1));
+    if ((w.sat?.pplIds||[]).includes(personId)) dates.push(w.date);
+    if ((w.sun?.pplIds||[]).includes(personId)) dates.push(addDays(w.date,1));
+  });
+  const past   = dates.filter(d=>d<t).sort().reverse();
+  const future = dates.filter(d=>d>=t).sort();
+  const lastDate = past[0]||null;
+  const nextDate = future[0]||null;
+  const ds = lastDate ? daysSince(lastDate) : null;
+  return { lastDate, nextDate, ds };
+}
 
 // ── Category icon ─────────────────────────────────────────────────────
 const catIco = c => ({'outdoor':'🏕️','dining':'🍽️','sports':'🏃','arts':'🎨','social':'🎲','travel':'✈️','other':'⭐'}[c]||'⭐');
@@ -760,9 +775,17 @@ const cmIco  = c => ({'text':'💬','call':'📞','whatsapp':'📱','instagram':
 // ── Recommendations engine ────────────────────────────────────────────
 function overduePeople() {
   return S.people
-    .filter(p=>p.lastSeen && p.freq)
-    .map(p=>{ const ds=daysSince(p.lastSeen); return {...p,ds,overdue:ds-p.freq,pct:Math.min(100,(ds/p.freq)*100)}; })
-    .filter(p=>p.overdue>0)
+    .filter(p=>p.freq)
+    .map(p=>{
+      const info=personPlanInfo(p.id);
+      if(info.nextDate) return null; // upcoming plan — not overdue
+      const ds=info.ds;
+      if(ds===null) return null; // no plan history
+      const overdue=ds-p.freq;
+      if(overdue<=0) return null;
+      return {...p, ds, overdue, pct:Math.min(100,(ds/p.freq)*100), info};
+    })
+    .filter(Boolean)
     .sort((a,b)=>b.overdue-a.overdue);
 }
 function overdueActivities() {
@@ -818,8 +841,8 @@ function getSuggestions() {
     suggs.push({ type:'activity', pri:a.overdue>30?2:3, a });
   });
 
-  // 6. People with no last-seen date set
-  const noDate=S.people.filter(p=>!p.lastSeen);
+  // 6. People with no plans (past or future)
+  const noDate=S.people.filter(p=>{ const i=personPlanInfo(p.id); return !i.lastDate&&!i.nextDate; });
   if(noDate.length) suggs.push({ type:'no-date', pri:5, people:noDate });
 
   return suggs.sort((a,b)=>a.pri-b.pri);
@@ -849,9 +872,8 @@ function renderPersonSugg(p) {
         <div class="av" style="background:${bg};color:${fg};width:42px;height:42px;font-size:16px;">${initials(p.name)}</div>
         <div style="flex:1;min-width:0;">
           <div class="card-title">${p.name}</div>
-          <div class="card-sub">Last seen ${fmtDate(p.lastSeen)} · ${p.ds}d ago</div>
+          <div class="card-sub">Last plan ${fmtDate(p.info.lastDate)} · ${p.ds}d ago</div>
         </div>
-        <button class="btn btn-sm btn-p" onclick="markSeen('${p.id}')">Seen ✓</button>
       </div>
       <div class="pbar"><div class="pbar-fill" style="width:${p.pct}%;background:${uc};"></div></div>
       ${acts.length?`
@@ -929,8 +951,8 @@ function renderNoDateSugg(people) {
   return `
     <div class="sugg-card" style="border-color:#e5e7eb;background:#f9fafb;">
       <div class="sugg-tag" style="color:var(--txt2);">👤 Setup needed</div>
-      <div class="card-title">${people.length} ${people.length===1?'person has':'people have'} no last-seen date</div>
-      <div class="card-sub">Without a date, the app can't tell if you're overdue.</div>
+      <div class="card-title">${people.length} ${people.length===1?'person has':'people have'} no plans</div>
+      <div class="card-sub">Add them to a weekend to start tracking.</div>
       <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
         ${people.map(p=>{ const [b,f]=avCol(p.name); return `<button class="sel-chip" style="background:${b};color:${f};border-color:transparent;" onclick="openPersonModal(getPers('${p.id}'))">${p.name.split(' ')[0]}</button>`; }).join('')}
       </div>
@@ -982,13 +1004,15 @@ function renderPeople() {
   }
   el.innerHTML=pp.map(p=>{
     const [bg,fg]=avCol(p.name);
-    const ds=daysSince(p.lastSeen);
-    const over=ds!==null&&p.freq&&ds>p.freq;
+    const info=personPlanInfo(p.id);
     const acts=(p.activities||[]).map(getAct).filter(Boolean);
-    const badge=over
-      ? `<span class="chip cr">Overdue ${ds-p.freq}d</span>`
-      : ds!==null ? `<span class="chip cg">✓ ${ds}d ago</span>`
-      : `<span class="chip cn">No date</span>`;
+    const badge=info.nextDate
+      ? `<span class="chip cg">📅 in ${daysBetween(today(),info.nextDate)}d</span>`
+      : info.ds!==null&&p.freq&&info.ds>p.freq
+      ? `<span class="chip cr">Overdue ${info.ds-p.freq}d</span>`
+      : info.ds!==null
+      ? `<span class="chip cg">✓ ${info.ds}d ago</span>`
+      : `<span class="chip cn">No plans</span>`;
     return `
       <div class="card" onclick="openPersonModal(getPers('${p.id}'))">
         <div style="display:flex;align-items:center;gap:11px;">
@@ -1115,7 +1139,7 @@ function renderTrips() {
   }).join('');
 }
 
-const getTrip=id=>S.trips.find(t=>t.id===id);
+
 
 // ── TAB SWITCHING ─────────────────────────────────────────────────────
 const TAB_TITLES={home:'Suggestions',people:'People',activities:'Activities',weekends:'Weekends',trips:'Trips'};
@@ -1167,7 +1191,6 @@ function openPersonModal(p=null) {
   document.getElementById('pp').value=p?.phone||'';
   document.getElementById('pcm').value=p?.cm||'text';
   document.getElementById('pf').value=p?.freq||14;
-  document.getElementById('pls').value=p?.lastSeen||today();
   document.getElementById('pid').value=p?.id||'';
   document.getElementById('m-person-title').textContent=p?'Edit Person':'Add Person';
   document.getElementById('p-del').style.display=p?'block':'none';
@@ -1188,7 +1211,7 @@ async function savePerson(e) {
     id:id||uid(), name:document.getElementById('pn').value.trim(),
     phone:document.getElementById('pp').value.trim(), cm:document.getElementById('pcm').value,
     freq:parseInt(document.getElementById('pf').value)||14,
-    lastSeen:document.getElementById('pls').value, activities:acts
+    activities:acts
   };
   closeModal('m-person'); renderTab(S.tab); toast(id?'Person updated':'Person added');
   await upsert('people', obj);
@@ -1239,7 +1262,7 @@ function actOptions(selectedId) {
 }
 function pplChips(prefix, selectedIds) {
   return S.people.length
-    ? S.people.map(p=>`<button type="button" class="sel-chip ${selectedIds.includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${initials(p.name)} ${p.name.split(' ')[0]}</button>`).join('')
+    ? S.people.map(p=>`<button type="button" class="sel-chip ${selectedIds.includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${p.name.split(' ')[0]}</button>`).join('')
     : '<span style="color:var(--txt2);font-size:13px;">Add people first</span>';
 }
 function openWkndModal(sat, prefPerson=null, prefAct=null) {
@@ -1292,6 +1315,15 @@ async function deleteWeekend() {
 }
 
 // ── TRIP MODAL ────────────────────────────────────────────────────────
+function syncTripEndDate() {
+  const start = document.getElementById('tstart').value;
+  const end   = document.getElementById('tend').value;
+  if (!start) return;
+  if (!end || end < start) {
+    const d = parseD(start); d.setDate(d.getDate()+7);
+    document.getElementById('tend').value = d.toISOString().split('T')[0];
+  }
+}
 function openTripModal(t=null) {
   document.getElementById('tdest').value=t?.dest||'';
   document.getElementById('tstart').value=t?.start||'';
@@ -1303,7 +1335,7 @@ function openTripModal(t=null) {
   document.getElementById('t-del').style.display=t?'block':'none';
 
   document.getElementById('t-ppl-chips').innerHTML=S.people.length
-    ? S.people.map(p=>`<button type="button" class="sel-chip ${(t?.pplIds||[]).includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${initials(p.name)} ${p.name.split(' ')[0]}</button>`).join('')
+    ? S.people.map(p=>`<button type="button" class="sel-chip ${(t?.pplIds||[]).includes(p.id)?'on':''}" onclick="toggleChip(this)" data-id="${p.id}">${p.name.split(' ')[0]}</button>`).join('')
     : '<span style="color:var(--txt2);font-size:13px;">Add people first</span>';
 
   openModal('m-trip');
